@@ -25,6 +25,12 @@
 #include <string>
 #include <vector>
 
+struct CropTexture
+{
+	std::string filename;
+	int w, h;
+};
+
 struct Config
 {
 	int rgssVersion;
@@ -88,6 +94,8 @@ struct Config
 	/* Internal */
 	std::string customDataPath;
 	std::string commonDataPath;
+
+	std::vector<CropTexture> cropTexs;
 
 	Config();
 

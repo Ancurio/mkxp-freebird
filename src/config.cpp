@@ -261,6 +261,53 @@ void Config::read(int argc, char *argv[])
 		customDataPath = prefPath(dataPathOrg.c_str(), dataPathApp.c_str());
 
 	commonDataPath = prefPath(".", "mkxp");
+
+	/* parse cropped textures config */
+	std::string cropTexFile;
+	if (!readFile("croptextures", cropTexFile))
+	{
+		Debug() << "Couldn't read croptextures config file";
+		return;
+	}
+
+	size_t lineStart = 0;
+	bool atEnd = false;
+
+	while (!atEnd)
+	{
+		CropTexture tex;
+
+		size_t fnEnd = cropTexFile.find('"', lineStart+1);
+		size_t numSep = cropTexFile.find(' ', fnEnd+2);
+		size_t lineEnd = cropTexFile.find('\n', numSep);
+
+		if (fnEnd == std::string::npos || numSep == std::string::npos)
+			break;
+
+		if (lineEnd == std::string::npos)
+		{
+			lineEnd = cropTexFile.size();
+			atEnd = true;
+		}
+
+		try
+		{
+			tex.filename = cropTexFile.substr(lineStart+1, fnEnd-(lineStart+1));
+			tex.w = atoi(cropTexFile.substr(fnEnd+2, numSep-(fnEnd+2)).c_str());
+			tex.h = atoi(cropTexFile.substr(numSep+1, lineEnd-(numSep+1)).c_str());
+		}
+		catch (...)
+		{
+			Debug() << "Couldn't parse croptextures config file";
+			cropTexs.clear();
+			break;
+		}
+
+		cropTexs.push_back(tex);
+		Debug() << "Parsed:" << tex.filename << tex.w << tex.h;
+
+		lineStart = lineEnd+1;
+	}
 }
 
 static std::string baseName(const std::string &path)

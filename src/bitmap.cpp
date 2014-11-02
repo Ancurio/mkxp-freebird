@@ -43,6 +43,7 @@
 #include "filesystem.h"
 #include "font.h"
 #include "eventthread.h"
+#include "debugwriter.h"
 
 #define GUARD_MEGA \
 	{ \
@@ -100,10 +101,20 @@ struct BitmapPrivate
 	 * ourselves the expensive blending calculation */
 	pixman_region16_t tainted;
 
+	bool isCrop;
+	CropTexture cropTex;
+	TEX::ID cropTexTex;
+
+	bool isResized;
+	Vec2i resizedSize;
+	TEX::ID resTex;
+
 	BitmapPrivate(Bitmap *self)
 	    : self(self),
 	      megaSurface(0),
-	      surface(0)
+	      surface(0),
+	      isCrop(false),
+	      isResized(false)
 	{
 		format = SDL_AllocFormat(SDL_PIXELFORMAT_ABGR8888);
 
@@ -167,7 +178,10 @@ struct BitmapPrivate
 	void bindTexture(ShaderBase &shader)
 	{
 		TEX::bind(gl.tex);
-		shader.setTexSize(Vec2i(gl.width, gl.height));
+		if (isCrop)
+			shader.setTexSize(Vec2i(cropTex.w, cropTex.h));
+		else
+			shader.setTexSize(Vec2i(gl.width, gl.height));
 	}
 
 	void bindFBO()
@@ -242,13 +256,113 @@ Bitmap::Bitmap(const char *filename)
 		throw Exception(Exception::SDLError, "Error loading image '%s': %s",
 		                filename, SDL_GetError());
 
+	bool isCrop = false;
+	CropTexture cropTex;
+	const std::vector<CropTexture> &crops = shState->config().cropTexs;
+	for (size_t i = 0; i < crops.size(); ++i)
+	{
+		if (crops[i].filename != filename)
+			continue;
+
+		Debug() << "Loading cropped texture:" << filename << crops[i].w << crops[i].h;
+		isCrop = true;
+		cropTex = crops[i];
+		break;
+	}
+
 	p->ensureFormat(imgSurf, SDL_PIXELFORMAT_ABGR8888);
 
-	if (imgSurf->w > glState.caps.maxTexSize || imgSurf->h > glState.caps.maxTexSize)
+	SDL_SetSurfaceBlendMode(imgSurf, SDL_BLENDMODE_NONE);
+
+	// Try catching too large images, while trying NOT to catch giant tilesets
+	if ((imgSurf->w > glState.caps.maxTexSize || imgSurf->h > glState.caps.maxTexSize) && imgSurf->w != 256 && !isCrop)
+	{
+		Vec2i resSize(imgSurf->w/2, imgSurf->h/2);
+		while (resSize.x > glState.caps.maxTexSize || resSize.y > glState.caps.maxTexSize)
+		{
+			resSize.x = resSize.x/2;
+			resSize.y = resSize.y/2;
+		}
+
+		Debug() << "Loading image" << filename << "at resolution"
+		        << resSize.x << resSize.y << "down from" << imgSurf->w << imgSurf->h;
+
+		// Use texture with halved dimensions instead
+		p = new BitmapPrivate(this);
+		p->isResized = true;
+		p->resizedSize = resSize;
+
+		int bpp; Uint32 rm, gm, bm, am;
+		SDL_PixelFormatEnumToMasks(SDL_PIXELFORMAT_ABGR8888, &bpp, &rm, &gm, &bm, &am);
+		SDL_Surface *resImg = SDL_CreateRGBSurface(0, resSize.x, resSize.y, bpp, rm, gm, bm, am);
+
+		SDL_BlitScaled(imgSurf, 0, resImg, 0);
+
+		TEX::ID tex = TEX::gen();
+		TEX::bind(tex);
+		TEX::uploadImage(resImg->w, resImg->h, resImg->pixels, GL_RGBA);
+		TEX::setRepeat(false);
+		TEX::setSmooth(true);
+
+		p->resTex = tex;
+		p->gl.tex = tex;
+		p->gl.width = imgSurf->w;
+		p->gl.height = imgSurf->h;
+
+		SDL_FreeSurface(imgSurf);
+		SDL_FreeSurface(resImg);
+	}
+	else if ((imgSurf->h > glState.caps.maxTexSize) && !isCrop) // Too large tilesets go here
 	{
 		/* Mega surface */
 		p = new BitmapPrivate(this);
 		p->megaSurface = imgSurf;
+	}
+	else if (isCrop)
+	{
+		p = new BitmapPrivate(this);
+		p->cropTex = cropTex;
+
+		Vec2i resSize(cropTex.w, cropTex.h);
+		while (resSize.x > glState.caps.maxTexSize || resSize.y > glState.caps.maxTexSize)
+		{
+			resSize.x = resSize.x/2;
+			resSize.y = resSize.y/2;
+		}
+
+		TEX::ID tex = TEX::gen();
+		TEX::bind(tex);
+		TEX::setRepeat(false);
+		TEX::setSmooth(false);
+
+		if (resSize == Vec2i(cropTex.w, cropTex.h))
+		{
+			TEX::allocEmpty(cropTex.w, cropTex.h);
+			GLMeta::subRectImageUpload(imgSurf->w, 0, 0, 0, 0, cropTex.w, cropTex.h, imgSurf, GL_RGBA);
+			GLMeta::subRectImageEnd();
+		}
+		else
+		{
+			int bpp; Uint32 rm, gm, bm, am;
+			SDL_PixelFormatEnumToMasks(SDL_PIXELFORMAT_ABGR8888, &bpp, &rm, &gm, &bm, &am);
+			SDL_Surface *resImg = SDL_CreateRGBSurface(0, resSize.x, resSize.y, bpp, rm, gm, bm, am);
+
+			IntRect src(0, 0, cropTex.w, cropTex.h);
+			SDL_BlitScaled(imgSurf, &src, resImg, 0);
+			TEX::uploadImage(resSize.x, resSize.y, resImg->pixels, GL_RGBA);
+
+			SDL_FreeSurface(resImg);
+
+			Debug() << "Loading cropped image" << filename << "at resolution"
+			        << resSize.x << resSize.y << "down from" << cropTex.w << cropTex.h;
+		}
+
+		p->cropTexTex = tex;
+
+		p->gl.tex = tex;
+		p->gl.width = imgSurf->w;
+		p->gl.height = imgSurf->h;
+		SDL_FreeSurface(imgSurf);
 	}
 	else
 	{
@@ -274,6 +388,7 @@ Bitmap::Bitmap(const char *filename)
 		SDL_FreeSurface(imgSurf);
 	}
 
+	p->isCrop = isCrop;
 	p->addTaintedArea(rect());
 }
 
@@ -1230,6 +1345,10 @@ void Bitmap::releaseResources()
 {
 	if (p->megaSurface)
 		SDL_FreeSurface(p->megaSurface);
+	else if (p->isCrop)
+		TEX::del(p->cropTexTex);
+	else if (p->isResized)
+		TEX::del(p->resTex);
 	else
 		shState->texPool().release(p->gl);
 
