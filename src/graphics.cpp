@@ -508,6 +508,12 @@ struct GraphicsPrivate
 	void swapGLBuffer()
 	{
 		fpsLimiter.delay();
+
+		// Steam overlay renderer blindly assumes that the default
+		// framebuffer is bound at swap time when it ReadPixels's to
+		// aquire screenshots.
+		FBO::unbind();
+
 		SDL_GL_SwapWindow(threadData->window);
 
 		++frameCount;
