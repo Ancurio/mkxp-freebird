@@ -23,10 +23,13 @@
 
 #include "sharedstate.h"
 #include "sharedmidistate.h"
+#include "eventthread.h"
 #include "filesystem.h"
+#include "exception.h"
 #include "aldatasource.h"
 #include "fluid-fun.h"
 #include "sdl-util.h"
+#include "debugwriter.h"
 
 #include <SDL_mutex.h>
 #include <SDL_thread.h>
@@ -122,6 +125,9 @@ void ALStream::stop()
 
 void ALStream::play(float offset)
 {
+	if (!source)
+		return;
+
 	checkStopped();
 
 	switch (state)
@@ -195,8 +201,8 @@ void ALStream::closeSource()
 
 void ALStream::openSource(const std::string &filename)
 {
-	const char *ext;
-	shState->fileSystem().openRead(srcOps, filename.c_str(), FileSystem::Audio, false, &ext);
+	char ext[8];
+	shState->fileSystem().openRead(srcOps, filename.c_str(), false, ext, sizeof(ext));
 	needsRewind.clear();
 
 	/* Try to read ogg file signature */
@@ -204,24 +210,36 @@ void ALStream::openSource(const std::string &filename)
 	SDL_RWread(&srcOps, sig, 1, 4);
 	SDL_RWseek(&srcOps, 0, RW_SEEK_SET);
 
-	if (!strcmp(sig, "OggS"))
+	try
 	{
-		source = createVorbisSource(srcOps, looped);
-		return;
-	}
-
-	if (!strcmp(sig, "MThd"))
-	{
-		shState->midiState().initIfNeeded(shState->config());
-
-		if (HAVE_FLUID)
+		if (!strcmp(sig, "OggS"))
 		{
-			source = createMidiSource(srcOps, looped);
+			source = createVorbisSource(srcOps, looped);
 			return;
 		}
-	}
 
-	source = createSDLSource(srcOps, ext, STREAM_BUF_SIZE, looped);
+		if (!strcmp(sig, "MThd"))
+		{
+			shState->midiState().initIfNeeded(shState->config());
+
+			if (HAVE_FLUID)
+			{
+				source = createMidiSource(srcOps, looped);
+				return;
+			}
+		}
+
+		source = createSDLSource(srcOps, ext, STREAM_BUF_SIZE, looped);
+	}
+	catch (const Exception &e)
+	{
+		char buf[512];
+		snprintf(buf, sizeof(buf), "Unable to decode audio stream: %s.%s: %s",
+		         filename.c_str(), ext, e.msg.c_str());
+		buf[sizeof(buf)-1] = '\0';
+
+		Debug() << buf;
+	}
 }
 
 void ALStream::stopStream()
@@ -361,6 +379,8 @@ void ALStream::streamData()
 	 * refill and queue them up again */
 	while (true)
 	{
+		shState->rtData().syncPoint.passSecondarySync();
+
 		ALint procBufs = AL::Source::getProcBufferCount(alSrc);
 
 		while (procBufs--)

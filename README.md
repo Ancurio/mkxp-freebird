@@ -4,8 +4,10 @@ mkxp is a project that seeks to provide a fully open source implementation of th
 
 It is licensed under the GNU General Public License v2+.
 
-[**Prebuilt binaries for Linux (32/64)**](http://ancurio.bplaced.net/mkxp/generic/)  
-[**Prebuilt binaries for OSX by Ali**](https://app.box.com/mkxpmacbuilds)
+## Prebuilt binaries
+[**Linux (32bit/64bit)**](http://ancurio.bplaced.net/mkxp/generic/)  
+[**OSX**](https://app.box.com/mkxpmacbuilds) by Ali  
+[**Windows (mingw-w64 32bit)**](http://ancurio.bplaced.net/mkxp/mingw32/)
 
 ## Bindings
 Bindings provide the glue code for an interpreted language environment to run game scripts in. Currently there are three bindings:
@@ -85,13 +87,11 @@ The syntax is: `--<option>=<value>`
 
 Example: `./mkxp --gameFolder="my game" --vsync=true --fixedFramerate=60`
 
-## Midi music (*ALPHA STATUS*)
+## Midi music
 
 mkxp doesn't come with a soundfont by default, so you will have to supply it yourself (set its path in the config). Playback has been tested and should work reasonably well with all RTP assets.
 
-Known issues with midi playback:
-
-* Some songs' instruments become mute after looping
+You can use this public domain soundfont: [GMGSx.sf2](https://www.dropbox.com/s/qxdvoxxcexsvn43/GMGSx.sf2?dl=0)
 
 ## Fonts
 
@@ -101,7 +101,6 @@ If a requested font is not found, no error is generated. Instead, a built-in fon
 
 ## What doesn't work (yet)
 
-* Text outline
 * Movie playback
 * wma audio files
 * The Win32API ruby class (for obvious reasons)

@@ -124,9 +124,9 @@ set(MAIN_HEADERS
 	src/glstate.h
 	src/quad.h
 	src/tilemap.h
-	src/flashmap.h
+	src/tilemap-common.h
 	src/graphics.h
-	src/debuglogger.h
+	src/gl-debug.h
 	src/global-ibo.h
 	src/exception.h
 	src/filesystem.h
@@ -180,7 +180,7 @@ set(MAIN_SOURCE
 	src/tilemap.cpp
 	src/autotiles.cpp
 	src/graphics.cpp
-	src/debuglogger.cpp
+	src/gl-debug.cpp
 	src/etc.cpp
 	src/config.cpp
 	src/settingsmenu.cpp
@@ -210,16 +210,21 @@ source_group("MKXP Source" FILES ${MAIN_SOURCE} ${MAIN_HEADERS})
 ## Setup embedded source ##
 
 set(EMBEDDED_INPUT
+	shader/common.h
 	shader/transSimple.frag
 	shader/trans.frag
 	shader/hue.frag
 	shader/sprite.frag
 	shader/plane.frag
+	shader/gray.frag
 	shader/bitmapBlit.frag
+	shader/flatColor.frag
 	shader/simple.frag
 	shader/simpleColor.frag
 	shader/simpleAlpha.frag
+	shader/simpleAlphaUni.frag
 	shader/flashMap.frag
+	shader/minimal.vert
 	shader/simple.vert
 	shader/simpleColor.vert
 	shader/sprite.vert
@@ -230,6 +235,7 @@ set(EMBEDDED_INPUT
 	shader/blurV.vert
 	shader/simpleMatrix.vert
 	assets/liberation.ttf
+	assets/icon.png
 )
 
 if (RGSS2)

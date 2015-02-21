@@ -1,5 +1,5 @@
 /*
-** debuglogger.h
+** gl-debug.h
 **
 ** This file is part of mkxp.
 **
@@ -22,16 +22,30 @@
 #ifndef DEBUGLOGGER_H
 #define DEBUGLOGGER_H
 
-struct DebugLoggerPrivate;
+#include "gl-fun.h"
 
-class DebugLogger
+#include <stdio.h>
+#include <algorithm>
+
+struct GLDebugLoggerPrivate;
+
+class GLDebugLogger
 {
 public:
-	DebugLogger(const char *filename = 0);
-	~DebugLogger();
+	GLDebugLogger(const char *filename = 0);
+	~GLDebugLogger();
 
 private:
-	DebugLoggerPrivate *p;
+	GLDebugLoggerPrivate *p;
 };
+
+#define GL_MARKER(format, ...) \
+	if (gl.StringMarker) \
+	{ \
+		char buf[128]; \
+		int len = snprintf(buf, sizeof(buf), format, ##__VA_ARGS__); \
+		gl.StringMarker(std::min<size_t>(len, sizeof(buf)), buf); \
+	}
+
 
 #endif // DEBUGLOGGER_H

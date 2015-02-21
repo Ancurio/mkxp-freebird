@@ -37,20 +37,21 @@
 #include <stdint.h>
 
 struct RGSSThreadData;
+typedef struct ALCdevice_struct ALCdevice;
 struct SDL_Window;
+union SDL_Event;
+
+#define MAX_FINGERS 4
 
 class EventThread
 {
 public:
-	static uint8_t keyStates[SDL_NUM_SCANCODES];
-
 	struct JoyState
 	{
-		int axis[256];
+		int axes[256];
+		uint8_t hats[256];
 		bool buttons[256];
 	};
-
-	static JoyState joyState;
 
 	struct MouseState
 	{
@@ -59,7 +60,21 @@ public:
 		bool buttons[32];
 	};
 
+	struct FingerState
+	{
+		bool down;
+		int x, y;
+	};
+
+	struct TouchState
+	{
+		FingerState fingers[MAX_FINGERS];
+	};
+
+	static uint8_t keyStates[SDL_NUM_SCANCODES];
+	static JoyState joyState;
 	static MouseState mouseState;
+	static TouchState touchState;
 
 	static bool allocUserEvents();
 
@@ -84,6 +99,8 @@ public:
 	void notifyFrame();
 
 private:
+	static int eventFilter(void *, SDL_Event*);
+
 	void resetInputStates();
 	void setFullscreen(SDL_Window *, bool mode);
 	void updateCursorState(bool inWindow);
@@ -96,111 +113,101 @@ private:
 	{
 		uint64_t lastFrame;
 		uint64_t displayCounter;
-		bool displaying;
-		bool immInitFlag;
-		bool immFiniFlag;
+		AtomicFlag sendUpdates;
+		AtomicFlag immInitFlag;
+		AtomicFlag immFiniFlag;
 		double acc;
 		uint32_t accDiv;
 	} fps;
 };
 
 /* Used to asynchronously inform the RGSS thread
- * about window size changes */
-struct WindowSizeNotify
+ * about certain value changes */
+template<typename T>
+struct UnidirMessage
 {
-	SDL_mutex *mutex;
+	UnidirMessage()
+	    : mutex(SDL_CreateMutex()),
+	      current(T())
+	{}
 
-	AtomicFlag changed;
-	int w, h;
-
-	WindowSizeNotify()
-	{
-		mutex = SDL_CreateMutex();
-		w = h = 0;
-	}
-
-	~WindowSizeNotify()
+	~UnidirMessage()
 	{
 		SDL_DestroyMutex(mutex);
 	}
 
 	/* Done from the sending side */
-	void notifyChange(int w, int h)
+	void post(const T &value)
 	{
 		SDL_LockMutex(mutex);
 
-		this->w = w;
-		this->h = h;
 		changed.set();
+		current = value;
 
 		SDL_UnlockMutex(mutex);
 	}
 
 	/* Done from the receiving side */
-	bool pollChange(int *w, int *h)
+	bool poll(T &out) const
 	{
 		if (!changed)
 			return false;
 
 		SDL_LockMutex(mutex);
 
-		*w = this->w;
-		*h = this->h;
+		out = current;
 		changed.clear();
 
 		SDL_UnlockMutex(mutex);
 
 		return true;
 	}
-};
 
-struct BindingNotify
-{
-	BindingNotify()
+	/* Done from either */
+	void get(T &out) const
 	{
-		mut = SDL_CreateMutex();
-	}
-	~BindingNotify()
-	{
-		SDL_DestroyMutex(mut);
-	}
-
-	bool poll(BDescVec &out) const
-	{
-		if (!changed)
-			return false;
-
-		SDL_LockMutex(mut);
-
-		out = data;
-		changed.clear();
-
-		SDL_UnlockMutex(mut);
-
-		return true;
-	}
-
-	void get(BDescVec &out) const
-	{
-		SDL_LockMutex(mut);
-		out = data;
-		SDL_UnlockMutex(mut);
-	}
-
-	void post(const BDescVec &d)
-	{
-		SDL_LockMutex(mut);
-
-		changed.set();
-		data = d;
-
-		SDL_UnlockMutex(mut);
+		SDL_LockMutex(mutex);
+		out = current;
+		SDL_UnlockMutex(mutex);
 	}
 
 private:
-	SDL_mutex *mut;
-	BDescVec data;
+	SDL_mutex *mutex;
 	mutable AtomicFlag changed;
+	T current;
+};
+
+struct SyncPoint
+{
+	/* Used by eventFilter to control sleep/wakeup */
+	void haltThreads();
+	void resumeThreads();
+
+	/* Used by RGSS thread */
+	bool mainSyncLocked();
+	void waitMainSync();
+
+	/* Used by secondary (audio) threads */
+	void passSecondarySync();
+
+private:
+	struct Util
+	{
+		Util();
+		~Util();
+
+		void lock();
+		void unlock(bool multi);
+		void waitForUnlock();
+
+		AtomicFlag locked;
+		SDL_mutex *mut;
+		SDL_cond *cond;
+	};
+
+	Util mainSync;
+	Util reply;
+	Util secondSync;
 };
 
 struct RGSSThreadData
@@ -218,15 +225,18 @@ struct RGSSThreadData
 	AtomicFlag rqResetFinish;
 
 	EventThread *ethread;
-	WindowSizeNotify windowSizeMsg;
-	BindingNotify bindingUpdateMsg;
+	UnidirMessage<Vec2i> windowSizeMsg;
+	UnidirMessage<BDescVec> bindingUpdateMsg;
+	SyncPoint syncPoint;
 
 	const char *argv0;
 
 	SDL_Window *window;
+	ALCdevice *alcDev;
 
 	Vec2 sizeResoRatio;
 	Vec2i screenOffset;
+	const int refreshRate;
 
 	Config config;
 
@@ -235,11 +245,15 @@ struct RGSSThreadData
 	RGSSThreadData(EventThread *ethread,
 	               const char *argv0,
 	               SDL_Window *window,
+	               ALCdevice *alcDev,
+	               int refreshRate,
 	               const Config& newconf)
 	    : ethread(ethread),
 	      argv0(argv0),
 	      window(window),
+	      alcDev(alcDev),
 	      sizeResoRatio(1, 1),
+	      refreshRate(refreshRate),
 	      config(newconf)
 	{}
 };

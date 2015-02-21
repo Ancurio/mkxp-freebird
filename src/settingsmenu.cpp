@@ -81,6 +81,7 @@ static elementsN(vButtons);
 std::string sourceDescString(const SourceDesc &src)
 {
 	char buf[128];
+	char pos;
 
 	switch (src.type)
 	{
@@ -102,6 +103,32 @@ std::string sourceDescString(const SourceDesc &src)
 	}
 	case JButton:
 		snprintf(buf, sizeof(buf), "JS %d", src.d.jb);
+		return buf;
+
+	case JHat:
+		switch(src.d.jh.pos)
+		{
+		case SDL_HAT_UP:
+			pos = 'U';
+			break;
+
+		case SDL_HAT_DOWN:
+			pos = 'D';
+			break;
+
+		case SDL_HAT_LEFT:
+			pos = 'L';
+			break;
+
+		case SDL_HAT_RIGHT:
+			pos = 'R';
+			break;
+
+		default:
+			pos = '-';
+		}
+		snprintf(buf, sizeof(buf), "Hat %d:%c",
+		         src.d.jh.hat, pos);
 		return buf;
 
 	case JAxis:
@@ -204,7 +231,8 @@ struct Label : Widget
 	Label(SMP *p, const IntRect &rect,
 	      const char *str, uint8_t r, uint8_t g, uint8_t b)
 	    : Widget(p, rect),
-	      str(str)
+	      str(str),
+	      visible(true)
 	{
 		c.r = r;
 		c.g = g;
@@ -615,6 +643,21 @@ struct SettingsMenuPrivate
 			desc.d.jb = event.jbutton.button;
 			break;
 
+		case SDL_JOYHATMOTION:
+		{
+			int v = event.jhat.value;
+
+			/* Only register if single directional input */
+			if (v != SDL_HAT_LEFT && v != SDL_HAT_RIGHT &&
+			    v != SDL_HAT_UP   && v != SDL_HAT_DOWN)
+				return true;
+
+			desc.type = JHat;
+			desc.d.jh.hat = event.jhat.hat;
+			desc.d.jh.pos = v;
+			break;
+		}
+
 		case SDL_JOYAXISMOTION:
 		{
 			int v = event.jaxis.value;
@@ -676,6 +719,9 @@ struct SettingsMenuPrivate
 			bWidgets[i].appendBindings(binds);
 
 		rtData.bindingUpdateMsg.post(binds);
+
+		/* Store the key bindings to disk as well to prevent config loss */
+		storeBindings(binds, rtData.config);
 
 		destroyReq = true;
 	}
@@ -1007,6 +1053,7 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 
 	case SDL_JOYBUTTONDOWN :
 	case SDL_JOYBUTTONUP :
+	case SDL_JOYHATMOTION :
 	case SDL_JOYAXISMOTION :
 		if (!p->hasFocus)
 			return false;
@@ -1083,6 +1130,7 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 		}
 
 	case SDL_JOYBUTTONDOWN:
+	case SDL_JOYHATMOTION:
 	case SDL_JOYAXISMOTION:
 		if (p->state != AwaitingInput)
 			return true;

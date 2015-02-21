@@ -29,12 +29,12 @@
 
 GLFunctions gl;
 
-typedef const GLubyte* (APIENTRYP PFNGLGETSTRINGIPROC) (GLenum, GLuint);
+typedef const GLubyte* (APIENTRYP _PFNGLGETSTRINGIPROC) (GLenum, GLuint);
 
-static void parseExtensionsCore(PFNGLGETINTEGERVPROC GetIntegerv, BoostSet<std::string> &out)
+static void parseExtensionsCore(_PFNGLGETINTEGERVPROC GetIntegerv, BoostSet<std::string> &out)
 {
-	PFNGLGETSTRINGIPROC GetStringi =
-		(PFNGLGETSTRINGIPROC) SDL_GL_GetProcAddress("glGetStringi");
+	_PFNGLGETSTRINGIPROC GetStringi =
+		(_PFNGLGETSTRINGIPROC) SDL_GL_GetProcAddress("glGetStringi");
 
 	GLint extCount = 0;
 	GetIntegerv(GL_NUM_EXTENSIONS, &extCount);
@@ -43,7 +43,7 @@ static void parseExtensionsCore(PFNGLGETINTEGERVPROC GetIntegerv, BoostSet<std::
 		out.insert((const char*) GetStringi(GL_EXTENSIONS, i));
 }
 
-static void parseExtensionsCompat(PFNGLGETSTRINGPROC GetString, BoostSet<std::string> &out)
+static void parseExtensionsCompat(_PFNGLGETSTRINGPROC GetString, BoostSet<std::string> &out)
 {
 	const char *ext = (const char*) GetString(GL_EXTENSIONS);
 
@@ -82,8 +82,8 @@ void initGLFunctions()
 	/* Determine GL version */
 	const char *ver = (const char*) gl.GetString(GL_VERSION);
 
-	const char *glesPrefix = "OpenGL ES ";
-	size_t glesPrefixN = strlen(glesPrefix);
+	const char glesPrefix[] = "OpenGL ES ";
+	const size_t glesPrefixN = sizeof(glesPrefix)-1;
 
 	bool gles = false;
 
@@ -100,6 +100,11 @@ void initGLFunctions()
 
 	if (glMajor < 2)
 		throw EXC("At least OpenGL (ES) 2.0 is required");
+
+	if (gles)
+	{
+		GL_ES_FUN;
+	}
 
 	BoostSet<std::string> ext;
 
@@ -170,6 +175,13 @@ void initGLFunctions()
 #undef EXT_SUFFIX
 #define EXT_SUFFIX "ARB"
 		GL_DEBUG_KHR_FUN;
+	}
+
+	if (HAVE_EXT(GREMEDY_string_marker))
+	{
+#undef EXT_SUFFIX
+#define EXT_SUFFIX "GREMEDY"
+		GL_GREMEMDY_FUN;
 	}
 
 	/* Misc caps */

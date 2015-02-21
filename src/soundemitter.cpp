@@ -26,6 +26,7 @@
 #include "exception.h"
 #include "config.h"
 #include "util.h"
+#include "debugwriter.h"
 
 #include <SDL_sound.h>
 
@@ -120,12 +121,15 @@ SoundEmitter::~SoundEmitter()
 
 void SoundEmitter::play(const std::string &filename,
                         int volume,
-					    int pitch)
+                        int pitch)
 {
 	float _volume = clamp<int>(volume, 0, 100) / 100.f;
 	float _pitch  = clamp<int>(pitch, 50, 150) / 100.f;
 
 	SoundBuffer *buffer = allocateBuffer(filename);
+
+	if (!buffer)
+		return;
 
 	/* Try to find first free source */
 	size_t i;
@@ -168,7 +172,7 @@ void SoundEmitter::play(const std::string &filename,
 	if (switchBuffer)
 		AL::Source::attachBuffer(src, buffer->alBuffer);
 
-	AL::Source::setVolume(src, _volume);
+	AL::Source::setVolume(src, _volume * GLOBAL_VOLUME);
 	AL::Source::setPitch(src, _pitch);
 
 	AL::Source::play(src);
@@ -197,18 +201,22 @@ SoundBuffer *SoundEmitter::allocateBuffer(const std::string &filename)
 	{
 		/* Buffer not in cashe, needs to be loaded */
 		SDL_RWops dataSource;
-		const char *extension;
+		char ext[8];
 
 		shState->fileSystem().openRead(dataSource, filename.c_str(),
-									   FileSystem::Audio, false, &extension);
+		                               false, ext, sizeof(ext));
 
-		Sound_Sample *sampleHandle = Sound_NewSample(&dataSource, extension, 0, STREAM_BUF_SIZE);
+		Sound_Sample *sampleHandle = Sound_NewSample(&dataSource, ext, 0, STREAM_BUF_SIZE);
 
 		if (!sampleHandle)
 		{
-			SDL_RWclose(&dataSource);
-			throw Exception(Exception::SDLError, "%s.%s: %s",
-			                filename.c_str(), extension, Sound_GetError());
+			char buf[512];
+			snprintf(buf, sizeof(buf), "Unable to decode sound: %s.%s: %s",
+			         filename.c_str(), ext, Sound_GetError());
+			buf[sizeof(buf)-1] = '\0';
+			Debug() << buf;
+
+			return 0;
 		}
 
 		uint32_t decBytes = Sound_DecodeAll(sampleHandle);

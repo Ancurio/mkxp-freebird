@@ -52,6 +52,8 @@
                             "Operation not supported for mega surfaces"); \
 	}
 
+#define OUTLINE_SIZE 1
+
 /* Normalize (= ensure width and
  * height are positive) */
 static IntRect normalizedRect(const IntRect &rect)
@@ -248,9 +250,10 @@ struct BitmapPrivate
 Bitmap::Bitmap(const char *filename)
 {
 	SDL_RWops ops;
-	const char *extension;
-	shState->fileSystem().openRead(ops, filename, FileSystem::Image, false, &extension);
-	SDL_Surface *imgSurf = IMG_LoadTyped_RW(&ops, 1, extension);
+	char ext[8];
+
+	shState->fileSystem().openRead(ops, filename, false, ext, sizeof(ext));
+	SDL_Surface *imgSurf = IMG_LoadTyped_RW(&ops, 1, ext);
 
 	if (!imgSurf)
 		throw Exception(Exception::SDLError, "Error loading image '%s': %s",
@@ -317,6 +320,7 @@ Bitmap::Bitmap(const char *filename)
 		/* Mega surface */
 		p = new BitmapPrivate(this);
 		p->megaSurface = imgSurf;
+		SDL_SetSurfaceBlendMode(p->megaSurface, SDL_BLENDMODE_NONE);
 	}
 	else if (isCrop)
 	{
@@ -487,13 +491,45 @@ void Bitmap::stretchBlt(const IntRect &destRect,
 	if (opacity == 0)
 		return;
 
-	if (source.megaSurface())
+	SDL_Surface *srcSurf = source.megaSurface();
+
+	if (srcSurf && shState->config().subImageFix)
 	{
+		/* Blit from software surface, for broken GL drivers */
+		Vec2i gpTexSize;
+		shState->ensureTexSize(sourceRect.w, sourceRect.h, gpTexSize);
+		shState->bindTex();
+
+		GLMeta::subRectImageUpload(srcSurf->w, sourceRect.x, sourceRect.y, 0, 0,
+		                           sourceRect.w, sourceRect.h, srcSurf, GL_RGBA);
+		GLMeta::subRectImageEnd();
+
+		SimpleShader &shader = shState->shaders().simple;
+		shader.bind();
+		shader.setTranslation(Vec2i());
+		shader.setTexSize(gpTexSize);
+
+		p->pushSetViewport(shader);
+		p->bindFBO();
+
+		Quad &quad = shState->gpQuad();
+		quad.setTexRect(FloatRect(0, 0, sourceRect.w, sourceRect.h));
+		quad.setPosRect(destRect);
+
+		p->blitQuad(quad);
+		p->popViewport();
+
+		p->addTaintedArea(destRect);
+		p->onModified();
+
+		return;
+	}
+	else if (srcSurf)
+	{
+		/* Blit from software surface */
 		/* Don't do transparent blits for now */
 		if (opacity < 255)
 			source.ensureNonMega();
-
-		SDL_Surface *srcSurf = source.megaSurface();
 
 		SDL_Rect srcRect = sourceRect;
 		SDL_Rect dstRect = destRect;
@@ -510,25 +546,24 @@ void Bitmap::stretchBlt(const IntRect &destRect,
 		SDL_Surface *blitTemp =
 			SDL_CreateRGBSurface(0, destRect.w, destRect.h, bpp, rMask, gMask, bMask, aMask);
 
-		// FXIME: This is supposed to be a scaled blit, put SDL2 for some reason
-		// makes the source surface unusable after BlitScaled() is called. Investigate!
-		SDL_BlitSurface(srcSurf, &srcRect, blitTemp, 0);
+		SDL_BlitScaled(srcSurf, &srcRect, blitTemp, 0);
 
 		TEX::bind(p->gl.tex);
 
 		if (bltRect.w == dstRect.w && bltRect.h == dstRect.h)
 		{
+			/* Dest rectangle lies within bounding box */
 			TEX::uploadSubImage(destRect.x, destRect.y,
 			                    destRect.w, destRect.h,
 			                    blitTemp->pixels, GL_RGBA);
 		}
 		else
 		{
+			/* Clipped blit */
 			GLMeta::subRectImageUpload(blitTemp->w, bltRect.x - dstRect.x, bltRect.y - dstRect.y,
 			                           bltRect.x, bltRect.y, bltRect.w, bltRect.h, blitTemp, GL_RGBA);
 			GLMeta::subRectImageEnd();
 		}
-
 
 		SDL_FreeSurface(blitTemp);
 
@@ -581,7 +616,6 @@ void Bitmap::stretchBlt(const IntRect &destRect,
 	}
 
 	p->addTaintedArea(destRect);
-
 	p->onModified();
 }
 
@@ -1057,6 +1091,7 @@ void Bitmap::drawText(const IntRect &rect, const char *str, int align)
 
 	TTF_Font *font = p->font->getSdlFont();
 	const Color &fontColor = p->font->getColor();
+	const Color &outColor = p->font->getOutColor();
 
 	SDL_Color c = fontColor.toSDLColor();
 	c.a = 255;
@@ -1072,10 +1107,33 @@ void Bitmap::drawText(const IntRect &rect, const char *str, int align)
 
 	p->ensureFormat(txtSurf, SDL_PIXELFORMAT_ABGR8888);
 
-	// While real outlining is not yet here, use shadow
-	// as a replacement to at least make text legible
-	if (p->font->getShadow() || p->font->getOutline())
+	if (p->font->getShadow())
 		applyShadow(txtSurf, *p->format, c);
+
+	/* outline using TTF_Outline and blending it together with SDL_BlitSurface
+	 * FIXME: outline is forced to have the same opacity as the font color */
+	if (p->font->getOutline())
+	{
+		SDL_Color co = outColor.toSDLColor();
+		co.a = 255;
+		SDL_Surface *outline;
+		/* set the next font render to render the outline */
+		TTF_SetFontOutline(font, OUTLINE_SIZE);
+		if (shState->rtData().config.solidFonts)
+			outline = TTF_RenderUTF8_Solid(font, str, co);
+		else
+			outline = TTF_RenderUTF8_Blended(font, str, co);
+
+		p->ensureFormat(outline, SDL_PIXELFORMAT_ABGR8888);
+		SDL_Rect outRect = {OUTLINE_SIZE, OUTLINE_SIZE, txtSurf->w, txtSurf->h}; 
+
+		SDL_SetSurfaceBlendMode(txtSurf, SDL_BLENDMODE_BLEND);
+		SDL_BlitSurface(txtSurf, NULL, outline, &outRect);
+		SDL_FreeSurface(txtSurf);
+		txtSurf = outline;
+		/* reset outline to 0 */
+		TTF_SetFontOutline(font, 0);
+	}
 
 	int alignX = rect.x;
 
@@ -1113,7 +1171,7 @@ void Bitmap::drawText(const IntRect &rect, const char *str, int align)
 
 	if (fastBlit)
 	{
-		if (squeeze == 1.0)
+		if (squeeze == 1.0 && !shState->config().subImageFix)
 		{
 			/* Even faster: upload directly to bitmap texture.
 			 * We have to make sure the posRect lies within the texture

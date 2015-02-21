@@ -1,4 +1,14 @@
-# Lines starting with '#' are comments
+# Lines starting with '#' are comments.
+#
+# About filesystem paths specified in this config:
+# The "gameFolder" path is resolved either relative
+# to the directory containing the mkxp executable
+# (the default behavior), or relative to the current
+# working directory (when compiled with 
+# -DWORKDIR_CURRENT). All other paths are resolved
+# relative to gameFolder and ignoring both RTPs and
+# encrypted archives.
+
 
 # Specify the RGSS version to run under.
 # Possible values are 0, 1, 2, 3. If set to 0,
@@ -15,6 +25,14 @@
 # (default: disabled)
 #
 # debugMode=false
+
+
+# Continuously print average FPS to console.
+# This setting does not affect the window title
+# FPS display toggled via F2
+# (default: disabled)
+#
+# printFPS=false
 
 
 # Game window is resizable
@@ -80,10 +98,30 @@
 # frameSkip=true
 
 
+# Use a fixed framerate that is approx. equal to the
+# native screen refresh rate. This is different from
+# "fixedFramerate" because the actual frame rate is
+# reported back to the game, ensuring correct timers.
+# If the screen refresh rate cannot be determined,
+# this option is force-disabled
+# (default: disabled)
+#
+# syncToRefreshrate=false
+
+
 # Don't use alpha blending when rendering text
 # (default: disabled)
 #
 # solidFonts=false
+
+
+# Work around buggy graphics drivers which don't
+# properly synchronize texture access, most
+# apparent when text doesn't show up or the map
+# tileset doesn't render at all
+# (default: disabled)
+#
+# subImageFix=false
 
 
 # Set the base path of the game to '/path/to/game'
@@ -216,6 +254,19 @@
 # this number. Maximum: 64.
 #
 # SE.sourceCount=6
+
+
+# The Windows game executable name minus ".exe". By default
+# this is "Game", but some developers manually rename it.
+# mkxp needs this name because both the .ini (game
+# configuration) and .rgssad (encrypted data archive) must
+# carry the same name minus their extension, and we cannot
+# guess the executable's name.
+# You could just as well rename them both to "Game.ini" and
+# "Game.rgssad", but specifying the executable name here
+# is a tiny bit less intrusive.
+#
+# execName=Game
 
 
 # Give a hint on which language the game title as

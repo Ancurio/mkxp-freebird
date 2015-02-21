@@ -26,6 +26,7 @@
 #include "table.h"
 
 #include "sharedstate.h"
+#include "config.h"
 #include "glstate.h"
 #include "gl-util.h"
 #include "gl-meta.h"
@@ -36,7 +37,7 @@
 #include "quad.h"
 #include "vertex.h"
 #include "tileatlas.h"
-#include "flashmap.h"
+#include "tilemap-common.h"
 
 #include <sigc++/connection.h>
 
@@ -441,15 +442,13 @@ struct TilemapPrivate
 
 	void updateSceneGeometry(const Scene::Geometry &geo)
 	{
-		elem.sceneOffset.x = geo.rect.x - geo.xOrigin;
-		elem.sceneOffset.y = geo.rect.y - geo.yOrigin;
+		elem.sceneOffset = geo.offset();
 		elem.sceneGeo = geo;
 	}
 
 	void updatePosition()
 	{
-		dispPos.x = -(offset.x - viewpPos.x * 32) + elem.sceneOffset.x;
-		dispPos.y = -(offset.y - viewpPos.y * 32) + elem.sceneOffset.y;
+		dispPos = -(offset - viewpPos * 32) + elem.sceneOffset;
 	}
 
 	void invalidateAtlasSize()
@@ -542,19 +541,59 @@ struct TilemapPrivate
 		if (tileset->megaSurface())
 		{
 			/* Mega surface tileset */
-			TEX::bind(atlas.gl.tex);
-
 			SDL_Surface *tsSurf = tileset->megaSurface();
 
-			for (size_t i = 0; i < blits.size(); ++i)
+			if (shState->config().subImageFix)
 			{
-				const TileAtlas::Blit &blitOp = blits[i];
+				/* Implementation for broken GL drivers */
+				FBO::bind(atlas.gl.fbo);
+				glState.blend.pushSet(false);
+				glState.viewport.pushSet(IntRect(0, 0, atlas.size.x, atlas.size.y));
 
-				GLMeta::subRectImageUpload(tsSurf->w, blitOp.src.x, blitOp.src.y,
-				                           blitOp.dst.x, blitOp.dst.y, tsLaneW, blitOp.h, tsSurf, GL_RGBA);
+				SimpleShader &shader = shState->shaders().simple;
+				shader.bind();
+				shader.applyViewportProj();
+				shader.setTranslation(Vec2i());
+
+				Quad &quad = shState->gpQuad();
+
+				for (size_t i = 0; i < blits.size(); ++i)
+				{
+					const TileAtlas::Blit &blitOp = blits[i];
+
+					Vec2i texSize;
+					shState->ensureTexSize(tsLaneW, blitOp.h, texSize);
+					shState->bindTex();
+					GLMeta::subRectImageUpload(tsSurf->w, blitOp.src.x, blitOp.src.y,
+					                           0, 0, tsLaneW, blitOp.h, tsSurf, GL_RGBA);
+
+					shader.setTexSize(texSize);
+					quad.setTexRect(FloatRect(0, 0, tsLaneW, blitOp.h));
+					quad.setPosRect(FloatRect(blitOp.dst.x, blitOp.dst.y, tsLaneW, blitOp.h));
+
+					quad.draw();
+				}
+
+				GLMeta::subRectImageEnd();
+				glState.viewport.pop();
+				glState.blend.pop();
+			}
+			else
+			{
+				/* Clean implementation */
+				TEX::bind(atlas.gl.tex);
+
+				for (size_t i = 0; i < blits.size(); ++i)
+				{
+					const TileAtlas::Blit &blitOp = blits[i];
+
+					GLMeta::subRectImageUpload(tsSurf->w, blitOp.src.x, blitOp.src.y,
+					                           blitOp.dst.x, blitOp.dst.y, tsLaneW, blitOp.h, tsSurf, GL_RGBA);
+				}
+
+				GLMeta::subRectImageEnd();
 			}
 
-			GLMeta::subRectImageEnd();
 		}
 		else
 		{
@@ -590,21 +629,6 @@ struct TilemapPrivate
 		return value;
 	}
 
-	FloatRect getAutotilePieceRect(int x, int y, /* in pixel coords */
-	                               int corner)
-	{
-		switch (corner)
-		{
-		case 0 : break;
-		case 1 : x += 16; break;
-		case 2 : x += 16; y += 16; break;
-		case 3 : y += 16; break;
-		default: abort();
-		}
-
-		return FloatRect(x, y, 16, 16);
-	}
-
 	void handleAutotile(int x, int y, int tileInd, SVVector *array)
 	{
 		/* Which autotile [0-7] */
@@ -617,7 +641,9 @@ struct TilemapPrivate
 		/* Iterate over the 4 tile pieces */
 		for (int i = 0; i < 4; ++i)
 		{
-			FloatRect posRect = getAutotilePieceRect(x*32, y*32, i);
+			FloatRect posRect(x*32, y*32, 16, 16);
+			atSelectSubPos(posRect, i);
+
 			FloatRect texRect = pieceRect[i];
 
 			/* Adjust to atlas coordinates */
@@ -635,7 +661,7 @@ struct TilemapPrivate
 	void handleTile(int x, int y, int z)
 	{
 		int tileInd =
-			tableGetWrapped(mapData, x + viewpPos.x, y + viewpPos.y, z);
+			tableGetWrapped(*mapData, x + viewpPos.x, y + viewpPos.y, z);
 
 		/* Check for empty space */
 		if (tileInd < 48)
@@ -972,6 +998,9 @@ void GroundLayer::updateVboCount()
 
 void GroundLayer::draw()
 {
+	if (p->groundVert.size() == 0)
+		return;
+
 	ShaderBase *shader;
 
 	p->bindShader(shader);

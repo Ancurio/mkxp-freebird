@@ -171,36 +171,112 @@ public:
 
 	void requestViewportRender(Vec4 &c, Vec4 &f, Vec4 &t)
 	{
-		pp.swapRender();
+		const IntRect &viewpRect = glState.scissorBox.get();
+		const IntRect &screenRect = geometry.rect;
 
-		/* Scissor test _does_ affect FBO blit operations,
-		 * and since we're inside the draw cycle, it will
-		 * be turned on, so turn it off temporarily */
-		glState.scissorTest.pushSet(false);
+		if (t.w != 0.0)
+		{
+			pp.swapRender();
 
-		GLMeta::blitBegin(pp.frontBuffer());
-		GLMeta::blitSource(pp.backBuffer());
-		GLMeta::blitRectangle(geometry.rect, Vec2i());
-		GLMeta::blitEnd();
+			if (!viewpRect.encloses(screenRect))
+			{
+				/* Scissor test _does_ affect FBO blit operations,
+				 * and since we're inside the draw cycle, it will
+				 * be turned on, so turn it off temporarily */
+				glState.scissorTest.pushSet(false);
 
-		glState.scissorTest.pop();
+				GLMeta::blitBegin(pp.frontBuffer());
+				GLMeta::blitSource(pp.backBuffer());
+				GLMeta::blitRectangle(geometry.rect, Vec2i());
+				GLMeta::blitEnd();
 
-		PlaneShader &shader = shState->shaders().plane;
+				glState.scissorTest.pop();
+			}
+
+			GrayShader &shader = shState->shaders().gray;
+			shader.bind();
+			shader.setGray(t.w);
+			shader.applyViewportProj();
+			shader.setTexSize(screenRect.size());
+
+			TEX::bind(pp.backBuffer().tex);
+
+			glState.blend.pushSet(false);
+			screenQuad.draw();
+			glState.blend.pop();
+		}
+
+		bool toneEffect = t.xyzHasEffect();
+		bool colorEffect = c.xyzHasEffect();
+		bool flashEffect = f.xyzHasEffect();
+
+		if (!toneEffect && !colorEffect && !flashEffect)
+			return;
+
+		FlatColorShader &shader = shState->shaders().flatColor;
 		shader.bind();
-		shader.setColor(c);
-		shader.setFlash(f);
-		shader.setTone(t);
-		shader.setOpacity(1.0);
 		shader.applyViewportProj();
-		shader.setTexSize(geometry.rect.size());
 
-		TEX::bind(pp.backBuffer().tex);
+		/* Apply tone */
+		if (toneEffect)
+		{
+			/* First split up additive / substractive components */
+			Vec4 add, sub;
 
-		glState.blend.pushSet(false);
+			if (t.x > 0)
+				add.x = t.x;
+			if (t.y > 0)
+				add.y = t.y;
+			if (t.z > 0)
+				add.z = t.z;
 
-		screenQuad.draw();
+			if (t.x < 0)
+				sub.x = -t.x;
+			if (t.y < 0)
+				sub.y = -t.y;
+			if (t.z < 0)
+				sub.z = -t.z;
 
-		glState.blend.pop();
+			/* Then apply them using hardware blending */
+			gl.BlendFuncSeparate(GL_ONE, GL_ONE, GL_ZERO, GL_ONE);
+
+			if (add.xyzHasEffect())
+			{
+				gl.BlendEquation(GL_FUNC_ADD);
+				shader.setColor(add);
+
+				screenQuad.draw();
+			}
+
+			if (sub.xyzHasEffect())
+			{
+				gl.BlendEquation(GL_FUNC_REVERSE_SUBTRACT);
+				shader.setColor(sub);
+
+				screenQuad.draw();
+			}
+		}
+
+		if (colorEffect || flashEffect)
+		{
+			gl.BlendEquation(GL_FUNC_ADD);
+			gl.BlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA,
+			                     GL_ZERO, GL_ONE);
+		}
+
+		if (colorEffect)
+		{
+			shader.setColor(c);
+			screenQuad.draw();
+		}
+
+		if (flashEffect)
+		{
+			shader.setColor(f);
+			screenQuad.draw();
+		}
+
+		glState.blendMode.refresh();
 	}
 
 	void setBrightness(float norm)
@@ -390,6 +466,7 @@ struct GraphicsPrivate
 
 	ScreenScene screen;
 	RGSSThreadData *threadData;
+	SDL_GLContext glCtx;
 
 	int frameRate;
 	int frameCount;
@@ -413,6 +490,7 @@ struct GraphicsPrivate
 	      winSize(rtData->config.defScreenW, rtData->config.defScreenH),
 	      screen(scRes.x, scRes.y),
 	      threadData(rtData),
+	      glCtx(SDL_GL_GetCurrentContext()),
 	      frameRate(DEF_FRAMERATE),
 	      frameCount(0),
 	      brightness(255),
@@ -482,7 +560,7 @@ struct GraphicsPrivate
 
 	void checkResize()
 	{
-		if (threadData->windowSizeMsg.pollChange(&winSize.x, &winSize.y))
+		if (threadData->windowSizeMsg.poll(winSize))
 		{
 			/* some GL drivers change the viewport on window resize */
 			glState.viewport.refresh();
@@ -552,16 +630,40 @@ struct GraphicsPrivate
 
 		swapGLBuffer();
 	}
+
+	void checkSyncLock()
+	{
+		if (!threadData->syncPoint.mainSyncLocked())
+			return;
+
+		/* Releasing the GL context before sleeping and making it
+		 * current again on wakeup seems to avoid the context loss
+		 * when the app moves into the background on Android */
+		SDL_GL_MakeCurrent(threadData->window, 0);
+		threadData->syncPoint.waitMainSync();
+		SDL_GL_MakeCurrent(threadData->window, glCtx);
+
+		fpsLimiter.resetFrameAdjust();
+	}
 };
 
 Graphics::Graphics(RGSSThreadData *data)
 {
 	p = new GraphicsPrivate(data);
 
-	if (data->config.fixedFramerate > 0)
-		p->fpsLimiter.setDesiredFPS(data->config.fixedFramerate);
-	else if (data->config.fixedFramerate < 0)
+	if (data->config.syncToRefreshrate)
+	{
+		p->frameRate = data->refreshRate;
 		p->fpsLimiter.disabled = true;
+	}
+	else if (data->config.fixedFramerate > 0)
+	{
+		p->fpsLimiter.setDesiredFPS(data->config.fixedFramerate);
+	}
+	else if (data->config.fixedFramerate < 0)
+	{
+		p->fpsLimiter.disabled = true;
+	}
 }
 
 Graphics::~Graphics()
@@ -572,6 +674,7 @@ Graphics::~Graphics()
 void Graphics::update()
 {
 	p->checkShutDownReset();
+	p->checkSyncLock();
 
 	if (p->frozen)
 		return;
@@ -613,10 +716,12 @@ void Graphics::transition(int duration,
                           const char *filename,
                           int vague)
 {
+	p->checkSyncLock();
+
 	if (!p->frozen)
 		return;
 
-	vague = clamp(vague, 0, 512);
+	vague = clamp(vague, 1, 256);
 	Bitmap *transMap = filename ? new Bitmap(filename) : 0;
 
 	setBrightness(255);
@@ -637,7 +742,7 @@ void Graphics::transition(int duration,
 		shader.setFrozenScene(p->frozenScene.tex);
 		shader.setCurrentScene(p->currentScene.tex);
 		shader.setTransMap(transMap->getGLTypes().tex);
-		shader.setVague(vague / 512.0f);
+		shader.setVague(vague / 256.0);
 		shader.setTexSize(p->scRes);
 	}
 	else
@@ -672,6 +777,8 @@ void Graphics::transition(int duration,
 			scriptBinding->reset();
 			return;
 		}
+
+		p->checkSyncLock();
 
 		const float prog = i * (1.0 / duration);
 
@@ -727,6 +834,9 @@ DEF_ATTR_SIMPLE(Graphics, FrameCount, int, p->frameCount)
 void Graphics::setFrameRate(int value)
 {
 	p->frameRate = clamp(value, 10, 120);
+
+	if (p->threadData->config.syncToRefreshrate)
+		return;
 
 	if (p->threadData->config.fixedFramerate > 0)
 		return;

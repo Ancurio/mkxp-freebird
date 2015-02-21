@@ -25,6 +25,7 @@
 #include "eventthread.h"
 #include "filesystem.h"
 #include "util.h"
+#include "sdl-util.h"
 #include "debugwriter.h"
 #include "graphics.h"
 #include "audio.h"
@@ -192,8 +193,11 @@ RB_METHOD(mriP)
 RB_METHOD(mkxpDataDirectory)
 {
 	RB_UNUSED_PARAM;
+	
+	const std::string &path = shState->config().customDataPath;
+	const char *s = path.empty() ? "." : path.c_str();
 
-	return rb_str_new_cstr(shState->config().customDataPath.c_str());
+	return rb_str_new_cstr(s);
 }
 
 RB_METHOD(mkxpPuts)
@@ -336,7 +340,7 @@ static void runCustomScript(const std::string &filename)
 {
 	std::string scriptData;
 
-	if (!readFile(filename.c_str(), scriptData))
+	if (!readFileSDL(filename.c_str(), scriptData))
 	{
 		showMsg(std::string("Unable to open '") + filename + "'");
 		return;
@@ -346,7 +350,7 @@ static void runCustomScript(const std::string &filename)
 	           newStringUTF8(filename.c_str(), filename.size()), NULL);
 }
 
-VALUE kernelLoadDataInt(const char *filename);
+VALUE kernelLoadDataInt(const char *filename, bool rubyExc);
 
 struct BacktraceData
 {
@@ -373,7 +377,19 @@ static void runRMXPScripts(BacktraceData &btData)
 		return;
 	}
 
-	VALUE scriptArray = kernelLoadDataInt(scriptPack.c_str());
+	VALUE scriptArray;
+
+	/* We checked if Scripts.rxdata exists, but something might
+	 * still go wrong */
+	try
+	{
+		scriptArray = kernelLoadDataInt(scriptPack.c_str(), false);
+	}
+	catch (const Exception &e)
+	{
+		showMsg(std::string("Failed to read script data: ") + e.msg);
+		return;
+	}
 
 	if (!RB_TYPE_P(scriptArray, RUBY_T_ARRAY))
 	{
@@ -540,6 +556,13 @@ static void showExc(VALUE exc, const BacktraceData &btData)
 
 static void mriBindingExecute()
 {
+	/* Normally only a ruby executable would do a sysinit,
+	 * but not doing it will lead to crashes due to closed
+	 * stdio streams on some platforms (eg. Windows) */
+	int argc = 0;
+	char **argv = 0;
+	ruby_sysinit(&argc, &argv);
+
 	ruby_setup();
 	rb_enc_set_default_external(rb_enc_from_encoding(rb_utf8_encoding()));
 

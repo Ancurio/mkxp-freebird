@@ -26,25 +26,51 @@
 #include <SDL_messagebox.h>
 #include <SDL_timer.h>
 #include <SDL_thread.h>
+#include <SDL_touch.h>
+
+#include <alext.h>
 
 #include "sharedstate.h"
 #include "graphics.h"
 #include "settingsmenu.h"
+#include "al-util.h"
 #include "debugwriter.h"
 
 #include <string.h>
 
-uint8_t EventThread::keyStates[] = { false };
+typedef void (ALC_APIENTRY *LPALCDEVICEPAUSESOFT) (ALCdevice *device);
+typedef void (ALC_APIENTRY *LPALCDEVICERESUMESOFT) (ALCdevice *device);
 
-EventThread::JoyState EventThread::joyState =
-{
-	{ 0 }, { false }
-};
+#define AL_DEVICE_PAUSE_FUN \
+	AL_FUN(DevicePause, LPALCDEVICEPAUSESOFT) \
+	AL_FUN(DeviceResume, LPALCDEVICERESUMESOFT)
 
-EventThread::MouseState EventThread::mouseState =
+struct ALCFunctions
 {
-	0, 0, false, { false }
-};
+#define AL_FUN(name, type) type name;
+	AL_DEVICE_PAUSE_FUN
+#undef AL_FUN
+} static alc;
+
+static void
+initALCFunctions(ALCdevice *alcDev)
+{
+	if (!strstr(alcGetString(alcDev, ALC_EXTENSIONS), "ALC_SOFT_pause_device"))
+		return;
+
+	Debug() << "ALC_SOFT_pause_device present";
+
+#define AL_FUN(name, type) alc. name = (type) alcGetProcAddress(alcDev, "alc" #name "SOFT");
+	AL_DEVICE_PAUSE_FUN;
+#undef AL_FUN
+}
+
+#define HAVE_ALC_DEVICE_PAUSE alc.DevicePause
+
+uint8_t EventThread::keyStates[];
+EventThread::JoyState EventThread::joyState;
+EventThread::MouseState EventThread::mouseState;
+EventThread::TouchState EventThread::touchState;
 
 /* User event codes */
 enum
@@ -80,18 +106,23 @@ void EventThread::process(RGSSThreadData &rtData)
 {
 	SDL_Event event;
 	SDL_Window *win = rtData.window;
-	WindowSizeNotify &windowSizeMsg = rtData.windowSizeMsg;
+	UnidirMessage<Vec2i> &windowSizeMsg = rtData.windowSizeMsg;
+
+	initALCFunctions(rtData.alcDev);
+	SDL_SetEventFilter(eventFilter, &rtData);
 
 	fullscreen = rtData.config.fullscreen;
 	int toggleFSMod = rtData.config.anyAltToggleFS ? KMOD_ALT : KMOD_LALT;
 
 	fps.lastFrame = SDL_GetPerformanceCounter();
 	fps.displayCounter = 0;
-	fps.displaying = false;
-	fps.immInitFlag = false;
-	fps.immFiniFlag = false;
 	fps.acc = 0;
 	fps.accDiv = 0;
+
+	if (rtData.config.printFPS)
+		fps.sendUpdates.set();
+
+	bool displayingFPS = false;
 
 	bool cursorInWindow = false;
 	bool windowFocused = false;
@@ -108,6 +139,11 @@ void EventThread::process(RGSSThreadData &rtData)
 	bool havePendingTitle = false;
 
 	bool resetting = false;
+
+	int winW, winH;
+	int i;
+
+	SDL_GetWindowSize(win, &winW, &winH);
 
 	SettingsMenu *sMenu = 0;
 
@@ -132,14 +168,36 @@ void EventThread::process(RGSSThreadData &rtData)
 			continue;
 		}
 
+		/* Preselect and discard unwanted events here */
+		switch (event.type)
+		{
+		case SDL_MOUSEBUTTONDOWN :
+		case SDL_MOUSEBUTTONUP :
+		case SDL_MOUSEMOTION :
+			if (event.button.which == SDL_TOUCH_MOUSEID)
+				continue;
+			break;
+
+		case SDL_FINGERDOWN :
+		case SDL_FINGERUP :
+		case SDL_FINGERMOTION :
+			if (event.tfinger.fingerId >= MAX_FINGERS)
+				continue;
+			break;
+		}
+
+		/* Now process the rest */
 		switch (event.type)
 		{
 		case SDL_WINDOWEVENT :
 			switch (event.window.event)
 			{
 			case SDL_WINDOWEVENT_SIZE_CHANGED :
-				windowSizeMsg.notifyChange(event.window.data1,
-				                           event.window.data2);
+				winW = event.window.data1;
+				winH = event.window.data2;
+
+				windowSizeMsg.post(Vec2i(winW, winH));
+				resetInputStates();
 				break;
 
 			case SDL_WINDOWEVENT_ENTER :
@@ -210,14 +268,18 @@ void EventThread::process(RGSSThreadData &rtData)
 
 			if (event.key.keysym.scancode == SDL_SCANCODE_F2)
 			{
-				if (!fps.displaying)
+				if (!displayingFPS)
 				{
-					fps.immInitFlag = true;
-					fps.displaying = true;
+					fps.immInitFlag.set();
+					fps.sendUpdates.set();
+					displayingFPS = true;
 				}
 				else
 				{
-					fps.displaying = false;
+					displayingFPS = false;
+
+					if (!rtData.config.printFPS)
+						fps.sendUpdates.clear();
 
 					if (fullscreen)
 					{
@@ -274,8 +336,12 @@ void EventThread::process(RGSSThreadData &rtData)
 			joyState.buttons[event.jbutton.button] = false;
 			break;
 
+		case SDL_JOYHATMOTION :
+			joyState.hats[event.jhat.hat] = event.jhat.value;
+			break;
+
 		case SDL_JOYAXISMOTION :
-			joyState.axis[event.jaxis.axis] = event.jaxis.value;
+			joyState.axes[event.jaxis.axis] = event.jaxis.value;
 			break;
 
 		case SDL_JOYDEVICEADDED :
@@ -300,7 +366,21 @@ void EventThread::process(RGSSThreadData &rtData)
 		case SDL_MOUSEMOTION :
 			mouseState.x = event.motion.x;
 			mouseState.y = event.motion.y;
+			break;
 
+		case SDL_FINGERDOWN :
+			i = event.tfinger.fingerId;
+			touchState.fingers[i].down = true;
+
+		case SDL_FINGERMOTION :
+			i = event.tfinger.fingerId;
+			touchState.fingers[i].x = event.tfinger.x * winW;
+			touchState.fingers[i].y = event.tfinger.y * winH;
+			break;
+
+		case SDL_FINGERUP :
+			i = event.tfinger.fingerId;
+			memset(&touchState.fingers[i], 0, sizeof(touchState.fingers[0]));
 			break;
 
 		default :
@@ -329,7 +409,10 @@ void EventThread::process(RGSSThreadData &rtData)
 				break;
 
 			case UPDATE_FPS :
-				if (!fps.displaying)
+				if (rtData.config.printFPS)
+					Debug() << "FPS:" << event.user.code;
+
+				if (!fps.sendUpdates)
 					break;
 
 				snprintf(buffer, sizeof(buffer), "%s - %d FPS",
@@ -354,10 +437,67 @@ void EventThread::process(RGSSThreadData &rtData)
 			break;
 	}
 
+	/* Just in case */
+	rtData.syncPoint.resumeThreads();
+
 	if (SDL_JoystickGetAttached(js))
 		SDL_JoystickClose(js);
 
 	delete sMenu;
+}
+
+int EventThread::eventFilter(void *data, SDL_Event *event)
+{
+	RGSSThreadData &rtData = *static_cast<RGSSThreadData*>(data);
+
+	switch (event->type)
+	{
+	case SDL_APP_WILLENTERBACKGROUND :
+		Debug() << "SDL_APP_WILLENTERBACKGROUND";
+
+		if (HAVE_ALC_DEVICE_PAUSE)
+			alc.DevicePause(rtData.alcDev);
+
+		rtData.syncPoint.haltThreads();
+
+		return 0;
+
+	case SDL_APP_DIDENTERBACKGROUND :
+		Debug() << "SDL_APP_DIDENTERBACKGROUND";
+		return 0;
+
+	case SDL_APP_WILLENTERFOREGROUND :
+		Debug() << "SDL_APP_WILLENTERFOREGROUND";
+		return 0;
+
+	case SDL_APP_DIDENTERFOREGROUND :
+		Debug() << "SDL_APP_DIDENTERFOREGROUND";
+
+		if (HAVE_ALC_DEVICE_PAUSE)
+			alc.DeviceResume(rtData.alcDev);
+
+		rtData.syncPoint.resumeThreads();
+
+		return 0;
+
+	case SDL_APP_TERMINATING :
+		Debug() << "SDL_APP_TERMINATING";
+		return 0;
+
+	case SDL_APP_LOWMEMORY :
+		Debug() << "SDL_APP_LOWMEMORY";
+		return 0;
+
+	case SDL_RENDER_TARGETS_RESET :
+		Debug() << "****** SDL_RENDER_TARGETS_RESET";
+		return 0;
+
+	case SDL_RENDER_DEVICE_RESET :
+		Debug() << "****** SDL_RENDER_DEVICE_RESET";
+		return 0;
+	}
+
+	return 1;
 }
 
 void EventThread::cleanup()
@@ -374,6 +514,7 @@ void EventThread::resetInputStates()
 	memset(&keyStates, 0, sizeof(keyStates));
 	memset(&joyState, 0, sizeof(joyState));
 	memset(&mouseState.buttons, 0, sizeof(mouseState.buttons));
+	memset(&touchState, 0, sizeof(touchState));
 }
 
 void EventThread::setFullscreen(SDL_Window *win, bool mode)
@@ -454,7 +595,7 @@ bool EventThread::getShowCursor() const
 
 void EventThread::notifyFrame()
 {
-	if (!fps.displaying)
+	if (!fps.sendUpdates)
 		return;
 
 	uint64_t current = SDL_GetPerformanceCounter();
@@ -463,8 +604,8 @@ void EventThread::notifyFrame()
 
 	if (fps.immInitFlag)
 	{
-		fps.immInitFlag = false;
-		fps.immFiniFlag = true;
+		fps.immInitFlag.clear();
+		fps.immFiniFlag.set();
 
 		return;
 	}
@@ -480,7 +621,7 @@ void EventThread::notifyFrame()
 		return;
 
 	fps.displayCounter = 0;
-	fps.immFiniFlag = false;
+	fps.immFiniFlag.clear();
 
 	int32_t avgFPS = fps.acc / fps.accDiv;
 	fps.acc = fps.accDiv = 0;
@@ -489,4 +630,88 @@ void EventThread::notifyFrame()
 	event.user.code = avgFPS;
 	event.user.type = usrIdStart + UPDATE_FPS;
 	SDL_PushEvent(&event);
+}
+
+void SyncPoint::haltThreads()
+{
+	if (mainSync.locked)
+		return;
+
+	/* Lock the reply sync first to avoid races */
+	reply.lock();
+
+	/* Lock main sync and sleep until RGSS thread
+	 * reports back */
+	mainSync.lock();
+	reply.waitForUnlock();
+
+	/* Now that the RGSS thread is asleep, we can
+	 * safely put the other threads to sleep as well
+	 * without causing deadlocks */
+	secondSync.lock();
+}
+
+void SyncPoint::resumeThreads()
+{
+	if (!mainSync.locked)
+		return;
+
+	mainSync.unlock(false);
+	secondSync.unlock(true);
+}
+
+bool SyncPoint::mainSyncLocked()
+{
+	return mainSync.locked;
+}
+
+void SyncPoint::waitMainSync()
+{
+	reply.unlock(false);
+	mainSync.waitForUnlock();
+}
+
+void SyncPoint::passSecondarySync()
+{
+	if (!secondSync.locked)
+		return;
+
+	secondSync.waitForUnlock();
+}
+
+SyncPoint::Util::Util()
+{
+	mut = SDL_CreateMutex();
+	cond = SDL_CreateCond();
+}
+
+SyncPoint::Util::~Util()
+{
+	SDL_DestroyCond(cond);
+	SDL_DestroyMutex(mut);
+}
+
+void SyncPoint::Util::lock()
+{
+	locked.set();
+}
+
+void SyncPoint::Util::unlock(bool multi)
+{
+	locked.clear();
+
+	if (multi)
+		SDL_CondBroadcast(cond);
+	else
+		SDL_CondSignal(cond);
+}
+
+void SyncPoint::Util::waitForUnlock()
+{
+	SDL_LockMutex(mut);
+
+	while (locked)
+		SDL_CondWait(cond, mut);
+
+	SDL_UnlockMutex(mut);
 }

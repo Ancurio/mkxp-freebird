@@ -26,20 +26,21 @@
 #include <SDL_ttf.h>
 #include <SDL_sound.h>
 
+#include <unistd.h>
+#include <string.h>
+#include <assert.h>
 #include <string>
 
 #include "sharedstate.h"
 #include "eventthread.h"
-#include "debuglogger.h"
+#include "gl-debug.h"
 #include "debugwriter.h"
 #include "exception.h"
 #include "gl-fun.h"
 
 #include "binding.h"
 
-#include <unistd.h>
-#include <string.h>
-#include <assert.h>
+#include "icon.png.xxd"
 
 static void
 rgssThreadError(RGSSThreadData *rtData, const std::string &msg)
@@ -67,13 +68,14 @@ printGLInfo()
 int rgssThreadFun(void *userdata)
 {
 	RGSSThreadData *threadData = static_cast<RGSSThreadData*>(userdata);
+	const Config &conf = threadData->config;
 	SDL_Window *win = threadData->window;
 	SDL_GLContext glCtx;
 
 	/* Setup GL context */
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 
-	if (threadData->config.debugMode)
+	if (conf.debugMode)
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
 
 	glCtx = SDL_GL_CreateContext(win);
@@ -102,27 +104,17 @@ int rgssThreadFun(void *userdata)
 
 	printGLInfo();
 
-	SDL_GL_SetSwapInterval(threadData->config.vsync ? 1 : 0);
+	bool vsync = conf.vsync || conf.syncToRefreshrate;
+	SDL_GL_SetSwapInterval(vsync ? 1 : 0);
 
-	DebugLogger dLogger;
+	GLDebugLogger dLogger;
 
 	/* Setup AL context */
-	ALCdevice *alcDev = alcOpenDevice(0);
-
-	if (!alcDev)
-	{
-		rgssThreadError(threadData, "Error opening OpenAL device");
-		SDL_GL_DeleteContext(glCtx);
-
-		return 0;
-	}
-
-	ALCcontext *alcCtx = alcCreateContext(alcDev, 0);
+	ALCcontext *alcCtx = alcCreateContext(threadData->alcDev, 0);
 
 	if (!alcCtx)
 	{
 		rgssThreadError(threadData, "Error creating OpenAL context");
-		alcCloseDevice(alcDev);
 		SDL_GL_DeleteContext(glCtx);
 
 		return 0;
@@ -138,7 +130,6 @@ int rgssThreadFun(void *userdata)
 	{
 		rgssThreadError(threadData, exc.msg);
 		alcDestroyContext(alcCtx);
-		alcCloseDevice(alcDev);
 		SDL_GL_DeleteContext(glCtx);
 
 		return 0;
@@ -153,8 +144,6 @@ int rgssThreadFun(void *userdata)
 	SharedState::finiInstance();
 
 	alcDestroyContext(alcCtx);
-	alcCloseDevice(alcDev);
-
 	SDL_GL_DeleteContext(glCtx);
 
 	return 0;
@@ -171,20 +160,27 @@ static void printRgssVersion(int ver)
 	Debug() << buf;
 }
 
+static void showInitError(const std::string &msg)
+{
+	Debug() << msg;
+	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "mkxp", msg.c_str(), 0);
+}
+
 int main(int argc, char *argv[])
 {
+	SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, "0");
+	SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0");
+
 	/* initialize SDL first */
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK) < 0)
 	{
-		Debug() << "Error initializing SDL:" << SDL_GetError();
-
+		showInitError(std::string("Error initializing SDL: ") + SDL_GetError());
 		return 0;
 	}
 
 	if (!EventThread::allocUserEvents())
 	{
-		Debug() << "Error allocating SDL user events";
-
+		showInitError("Error allocating SDL user events");
 		return 0;
 	}
 
@@ -201,8 +197,15 @@ int main(int argc, char *argv[])
 
 	/* now we load the config */
 	Config conf;
-
 	conf.read(argc, argv);
+
+	if (!conf.gameFolder.empty())
+		if (chdir(conf.gameFolder.c_str()) != 0)
+		{
+			showInitError(std::string("Unable to switch into gameFolder ") + conf.gameFolder);
+			return 0;
+		}
+
 	conf.readGameINI();
 
 	assert(conf.rgssVersion >= 1 && conf.rgssVersion <= 3);
@@ -211,7 +214,7 @@ int main(int argc, char *argv[])
 	int imgFlags = IMG_INIT_PNG | IMG_INIT_JPG;
 	if (IMG_Init(imgFlags) != imgFlags)
 	{
-		Debug() << "Error initializing SDL_image:" << SDL_GetError();
+		showInitError(std::string("Error initializing SDL_image: ") + SDL_GetError());
 		SDL_Quit();
 
 		return 0;
@@ -219,7 +222,7 @@ int main(int argc, char *argv[])
 
 	if (TTF_Init() < 0)
 	{
-		Debug() << "Error initializing SDL_ttf:" << SDL_GetError();
+		showInitError(std::string("Error initializing SDL_ttf: ") + SDL_GetError());
 		IMG_Quit();
 		SDL_Quit();
 
@@ -228,7 +231,7 @@ int main(int argc, char *argv[])
 
 	if (Sound_Init() == 0)
 	{
-		Debug() << "Error initializing SDL_sound:" << Sound_GetError();
+		showInitError(std::string("Error initializing SDL_sound: ") + Sound_GetError());
 		TTF_Quit();
 		IMG_Quit();
 		SDL_Quit();
@@ -236,7 +239,15 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
-	SDL_SetHint("SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS", "0");
+	/* Setup application icon */
+	SDL_RWops *iconSrc;
+
+	if (conf.iconPath.empty())
+		iconSrc = SDL_RWFromConstMem(assets_icon_png, assets_icon_png_len);
+	else
+		iconSrc = SDL_RWFromFile(conf.iconPath.c_str(), "rb");
+
+	SDL_Surface *iconImg = IMG_Load_RW(iconSrc, SDL_TRUE);
 
 	SDL_Window *win;
 	Uint32 winFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_INPUT_FOCUS;
@@ -252,22 +263,43 @@ int main(int argc, char *argv[])
 
 	if (!win)
 	{
-		Debug() << "Error creating window:" << SDL_GetError();
+		showInitError(std::string("Error creating window: ") + SDL_GetError());
 		return 0;
 	}
 
-	if (!conf.iconPath.empty())
+	if (iconImg)
 	{
-		SDL_Surface *iconImg = IMG_Load(conf.iconPath.c_str());
-		if (iconImg)
-		{
-			SDL_SetWindowIcon(win, iconImg);
-			SDL_FreeSurface(iconImg);
-		}
+		SDL_SetWindowIcon(win, iconImg);
+		SDL_FreeSurface(iconImg);
 	}
 
+	ALCdevice *alcDev = alcOpenDevice(0);
+
+	if (!alcDev)
+	{
+		showInitError("Error opening OpenAL device");
+		SDL_DestroyWindow(win);
+		TTF_Quit();
+		IMG_Quit();
+		SDL_Quit();
+
+		return 0;
+	}
+
+	SDL_DisplayMode mode;
+	SDL_GetDisplayMode(0, 0, &mode);
+
+	/* Can't sync to display refresh rate if its value is unknown */
+	if (!mode.refresh_rate)
+		conf.syncToRefreshrate = false;
+
 	EventThread eventThread;
-	RGSSThreadData rtData(&eventThread, argv[0], win, conf);
+	RGSSThreadData rtData(&eventThread, argv[0], win,
+	                      alcDev, mode.refresh_rate, conf);
+
+	int winW, winH;
+	SDL_GetWindowSize(win, &winW, &winH);
+	rtData.windowSizeMsg.post(Vec2i(winW, winH));
 
 	/* Load and post key bindings */
 	rtData.bindingUpdateMsg.post(loadBindings(conf));
@@ -314,13 +346,9 @@ int main(int argc, char *argv[])
 	/* Clean up any remainin events */
 	eventThread.cleanup();
 
-	/* Store key bindings */
-	BDescVec keyBinds;
-	rtData.bindingUpdateMsg.get(keyBinds);
-	storeBindings(keyBinds, rtData.config);
-
 	Debug() << "Shutting down.";
 
+	alcCloseDevice(alcDev);
 	SDL_DestroyWindow(win);
 
 	Sound_Quit();

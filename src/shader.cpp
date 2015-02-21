@@ -28,25 +28,30 @@
 #include <string.h>
 #include <iostream>
 
-#include "../sprite.frag.xxd"
-#include "../hue.frag.xxd"
-#include "../trans.frag.xxd"
-#include "../transSimple.frag.xxd"
-#include "../bitmapBlit.frag.xxd"
-#include "../plane.frag.xxd"
-#include "../simple.frag.xxd"
-#include "../simpleColor.frag.xxd"
-#include "../simpleAlpha.frag.xxd"
-#include "../flashMap.frag.xxd"
-#include "../simple.vert.xxd"
-#include "../simpleColor.vert.xxd"
-#include "../sprite.vert.xxd"
-#include "../tilemap.vert.xxd"
-#include "../blur.frag.xxd"
-#include "../simpleMatrix.vert.xxd"
-#include "../blurH.vert.xxd"
-#include "../blurV.vert.xxd"
-#include "../tilemapvx.vert.xxd"
+#include "common.h.xxd"
+#include "sprite.frag.xxd"
+#include "hue.frag.xxd"
+#include "trans.frag.xxd"
+#include "transSimple.frag.xxd"
+#include "bitmapBlit.frag.xxd"
+#include "plane.frag.xxd"
+#include "gray.frag.xxd"
+#include "flatColor.frag.xxd"
+#include "simple.frag.xxd"
+#include "simpleColor.frag.xxd"
+#include "simpleAlpha.frag.xxd"
+#include "simpleAlphaUni.frag.xxd"
+#include "flashMap.frag.xxd"
+#include "minimal.vert.xxd"
+#include "simple.vert.xxd"
+#include "simpleColor.vert.xxd"
+#include "sprite.vert.xxd"
+#include "tilemap.vert.xxd"
+#include "blur.frag.xxd"
+#include "simpleMatrix.vert.xxd"
+#include "blurH.vert.xxd"
+#include "blurV.vert.xxd"
+#include "tilemapvx.vert.xxd"
 
 
 #define INIT_SHADER(vert, frag, name) \
@@ -106,32 +111,39 @@ void Shader::unbind()
 	glState.program.set(0);
 }
 
-static const char *glesHeader = "precision mediump float;\n";
-static const size_t glesHeaderSize = strlen(glesHeader);
-
-static void setupShaderSource(GLuint shader,
-                              const unsigned char *src, int srcSize)
+static void setupShaderSource(GLuint shader, GLenum type,
+                              const unsigned char *body, int bodySize)
 {
-	GLuint shaderSrcN;
-	const GLchar *shaderSrc[2];
-	GLint shaderSrcSize[2];
+	static const char glesDefine[] = "#define GLSLES\n";
+	static const char fragDefine[] = "#define FRAGMENT_SHADER\n";
+
+	const GLchar *shaderSrc[4];
+	GLint shaderSrcSize[4];
+	size_t i = 0;
 
 	if (gl.glsles)
 	{
-		shaderSrcN = 2;
-		shaderSrc[0] = glesHeader;
-		shaderSrc[1] = (const GLchar*) src;
-		shaderSrcSize[0] = glesHeaderSize;
-		shaderSrcSize[1] = srcSize;
-	}
-	else
-	{
-		shaderSrcN = 1;
-		shaderSrc[0] = (const GLchar*) src;
-		shaderSrcSize[0] = srcSize;
+		shaderSrc[i] = glesDefine;
+		shaderSrcSize[i] = sizeof(glesDefine)-1;
+		++i;
 	}
 
-	gl.ShaderSource(shader, shaderSrcN, shaderSrc, shaderSrcSize);
+	if (type == GL_FRAGMENT_SHADER)
+	{
+		shaderSrc[i] = fragDefine;
+		shaderSrcSize[i] = sizeof(fragDefine)-1;
+		++i;
+	}
+
+	shaderSrc[i] = (const GLchar*) shader_common_h;
+	shaderSrcSize[i] = shader_common_h_len;
+	++i;
+
+	shaderSrc[i] = (const GLchar*) body;
+	shaderSrcSize[i] = bodySize;
+	++i;
+
+	gl.ShaderSource(shader, i, shaderSrc, shaderSrcSize);
 }
 
 void Shader::init(const unsigned char *vert, int vertSize,
@@ -142,7 +154,7 @@ void Shader::init(const unsigned char *vert, int vertSize,
 	GLint success;
 
 	/* Compile vertex shader */
-	setupShaderSource(vertShader, vert, vertSize);
+	setupShaderSource(vertShader, GL_VERTEX_SHADER, vert, vertSize);
 	gl.CompileShader(vertShader);
 
 	gl.GetShaderiv(vertShader, GL_COMPILE_STATUS, &success);
@@ -156,7 +168,7 @@ void Shader::init(const unsigned char *vert, int vertSize,
 	}
 
 	/* Compile fragment shader */
-	setupShaderSource(fragShader, frag, fragSize);
+	setupShaderSource(fragShader, GL_FRAGMENT_SHADER, frag, fragSize);
 	gl.CompileShader(fragShader);
 
 	gl.GetShaderiv(fragShader, GL_COMPILE_STATUS, &success);
@@ -260,6 +272,21 @@ void ShaderBase::setTranslation(const Vec2i &value)
 }
 
 
+FlatColorShader::FlatColorShader()
+{
+	INIT_SHADER(minimal, flatColor, FlatColorShader);
+
+	ShaderBase::init();
+
+	GET_U(color);
+}
+
+void FlatColorShader::setColor(const Vec4 &value)
+{
+	setVec4Uniform(u_color, value);
+}
+
+
 SimpleShader::SimpleShader()
 {
 	INIT_SHADER(simple, simple, SimpleShader);
@@ -303,6 +330,27 @@ SimpleSpriteShader::SimpleSpriteShader()
 void SimpleSpriteShader::setSpriteMat(const float value[16])
 {
 	gl.UniformMatrix4fv(u_spriteMat, 1, GL_FALSE, value);
+}
+
+
+AlphaSpriteShader::AlphaSpriteShader()
+{
+	INIT_SHADER(sprite, simpleAlphaUni, AlphaSpriteShader);
+
+	ShaderBase::init();
+
+	GET_U(spriteMat);
+	GET_U(alpha);
+}
+
+void AlphaSpriteShader::setSpriteMat(const float value[16])
+{
+	gl.UniformMatrix4fv(u_spriteMat, 1, GL_FALSE, value);
+}
+
+void AlphaSpriteShader::setAlpha(float value)
+{
+	gl.Uniform1f(u_alpha, value);
 }
 
 
@@ -447,6 +495,21 @@ void PlaneShader::setFlash(const Vec4 &flash)
 void PlaneShader::setOpacity(float value)
 {
 	gl.Uniform1f(u_opacity, value);
+}
+
+
+GrayShader::GrayShader()
+{
+	INIT_SHADER(simple, gray, GrayShader);
+
+	ShaderBase::init();
+
+	GET_U(gray);
+}
+
+void GrayShader::setGray(float value)
+{
+	gl.Uniform1f(u_gray, value);
 }
 
 

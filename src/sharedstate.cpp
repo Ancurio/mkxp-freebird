@@ -46,14 +46,14 @@ SharedState *SharedState::instance = 0;
 int SharedState::rgssVersion = 0;
 static GlobalIBO *_globalIBO = 0;
 
-static const char *defGameArchive()
+static const char *gameArchExt()
 {
 	if (rgssVer == 1)
-		return "Game.rgssad";
+		return ".rgssad";
 	else if (rgssVer == 2)
-		return "Game.rgss2a";
+		return ".rgss2a";
 	else if (rgssVer == 3)
-		return "Game.rgss3a";
+		return ".rgss3a";
 
 	assert(!"unreachable");
 	return 0;
@@ -88,6 +88,7 @@ struct SharedStatePrivate
 
 	TEX::ID globalTex;
 	int globalTexW, globalTexH;
+	bool globalTexDirty;
 
 	TEXFBO gpTexFBO;
 
@@ -107,25 +108,18 @@ struct SharedStatePrivate
 	      midiState(threadData->config),
 	      graphics(threadData),
 	      input(*threadData),
-	      audio(threadData->config),
+	      audio(*threadData),
 	      fontState(threadData->config),
 	      stampCounter(0)
 	{
-		if (!config.gameFolder.empty())
-		{
-			int result = chdir(config.gameFolder.c_str());
+		/* Shaders have been compiled in ShaderSet's constructor */
+		if (gl.ReleaseShaderCompiler)
+			gl.ReleaseShaderCompiler();
 
-			if (result != 0)
-				throw Exception(Exception::MKXPError,
-			                    "Unable to switch into gameFolder '%s'",
-			                    config.gameFolder.c_str());
-		}
-
-		// FIXME find out correct archive filename
-		std::string archPath = defGameArchive();
+		std::string archPath = config.execName + gameArchExt();
 
 		/* Check if a game archive exists */
-		FILE *tmp = fopen(archPath.c_str(), "r");
+		FILE *tmp = fopen(archPath.c_str(), "rb");
 		if (tmp)
 		{
 			fileSystem.addPath(archPath.c_str());
@@ -150,6 +144,7 @@ struct SharedStatePrivate
 		TEX::setRepeat(false);
 		TEX::setSmooth(false);
 		TEX::allocEmpty(globalTexW, globalTexH);
+		globalTexDirty = false;
 
 		TEXFBO::init(gpTexFBO);
 		/* Reuse starting values */
@@ -257,16 +252,27 @@ GlobalIBO &SharedState::globalIBO()
 void SharedState::bindTex()
 {
 	TEX::bind(p->globalTex);
-	TEX::allocEmpty(p->globalTexW, p->globalTexH);
+
+	if (p->globalTexDirty)
+	{
+		TEX::allocEmpty(p->globalTexW, p->globalTexH);
+		p->globalTexDirty = false;
+	}
 }
 
 void SharedState::ensureTexSize(int minW, int minH, Vec2i &currentSizeOut)
 {
 	if (minW > p->globalTexW)
+	{
+		p->globalTexDirty = true;
 		p->globalTexW = findNextPow2(minW);
+	}
 
 	if (minH > p->globalTexH)
+	{
+		p->globalTexDirty = true;
 		p->globalTexH = findNextPow2(minH);
+	}
 
 	currentSizeOut = Vec2i(p->globalTexW, p->globalTexH);
 }

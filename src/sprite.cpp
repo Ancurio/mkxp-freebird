@@ -57,7 +57,8 @@ struct SpritePrivate
 	NormValue opacity;
 	BlendType blendType;
 
-	SDL_Rect sceneRect;
+	IntRect sceneRect;
+	Vec2i sceneOrig;
 
 	/* Would this sprite be visible on
 	 * the screen if drawn? */
@@ -182,9 +183,8 @@ struct SpritePrivate
 			return;
 		}
 
-		SDL_Rect self;
-		self.x = trans.getPosition().x - trans.getOrigin().x;
-		self.y = trans.getPosition().y - trans.getOrigin().y;
+		IntRect self;
+		self.setPos(trans.getPositionI() - (trans.getOriginI() + sceneOrig));
 		self.w = bitmap->width();
 		self.h = bitmap->height();
 
@@ -332,7 +332,7 @@ void Sprite::setBitmap(Bitmap *bitmap)
 
 	p->bitmap = bitmap;
 
-	if (!bitmap)
+	if (nullOrDisposed(bitmap))
 		return;
 
 	bitmap->ensureNonMega();
@@ -515,7 +515,6 @@ void Sprite::draw()
 
 	bool renderEffect = p->color->hasEffect() ||
 	                    p->tone->hasEffect()  ||
-	                    p->opacity != 255     ||
 	                    flashing              ||
 	                    p->bushDepth != 0;
 
@@ -539,6 +538,16 @@ void Sprite::draw()
 
 		shader.setColor(*blend);
 
+		base = &shader;
+	}
+	else if (p->opacity != 255)
+	{
+		AlphaSpriteShader &shader = shState->shaders().alphaSprite;
+		shader.bind();
+
+		shader.setSpriteMat(p->trans.getMatrix());
+		shader.setAlpha(p->opacity.norm);
+		shader.applyViewportProj();
 		base = &shader;
 	}
 	else
@@ -567,13 +576,10 @@ void Sprite::onGeometryChange(const Scene::Geometry &geo)
 {
 	/* Offset at which the sprite will be drawn
 	 * relative to screen origin */
-	int xOffset = geo.rect.x - geo.xOrigin;
-	int yOffset = geo.rect.y - geo.yOrigin;
+	p->trans.setGlobalOffset(geo.offset());
 
-	p->trans.setGlobalOffset(xOffset, yOffset);
-
-	p->sceneRect.w = geo.rect.w;
-	p->sceneRect.h = geo.rect.h;
+	p->sceneRect.setSize(geo.rect.size());
+	p->sceneOrig = geo.orig;
 }
 
 void Sprite::releaseResources()
