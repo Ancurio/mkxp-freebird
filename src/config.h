@@ -29,7 +29,7 @@ struct CropTexture
 {
 	std::string filename;
 	int w, h;
-}
+};
 
 struct TouchOverlay
 {
