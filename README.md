@@ -44,7 +44,7 @@ This binding only exists for testing purposes and does nothing (the engine quits
 * SDL2*
 * SDL2_image
 * SDL2_ttf
-* SDL_sound (latest hg, apply provided patches!)
+* [my SDL_sound fork](https://github.com/Ancurio/SDL_sound)
 * vorbisfile
 * pixman
 * zlib (only ruby bindings)
@@ -76,6 +76,10 @@ To auto detect the encoding of the game title in `Game.ini` and auto convert it 
 These depend on the SDL auxiliary libraries. For maximum RGSS compliance, build SDL2_image with png/jpg support, and SDL_sound with oggvorbis/wav/mp3 support.
 
 To run mkxp, you should have a graphics card capable of at least **OpenGL (ES) 2.0** with an up-to-date driver installed.
+
+## Dependency kit
+
+To facilitate hacking, I have assembled a package containing all dependencies to compile mkxp on a bare-bones Ubuntu 12.04 64bit installation. Compatibility with other distributions has not been tested. You can download it [here](https://www.dropbox.com/s/mtp44ur367m2zts/mkxp-depkit.tar.xz). Read the "README" for instructions.
 
 ## Configuration
 
