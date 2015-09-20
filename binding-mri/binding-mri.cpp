@@ -31,6 +31,8 @@
 #include "audio.h"
 #include "boost-hash.h"
 
+#include "steamshim/steamshim_child.h"
+
 #include <ruby.h>
 #include <ruby/encoding.h>
 
@@ -313,6 +315,22 @@ RB_METHOD(_kernelCaller)
 	return trace;
 }
 
+RB_METHOD(_steamAchievementUnlock)
+{
+	RB_UNUSED_PARAM;
+
+	if (!STEAMSHIM_alive())
+		return Qnil;
+
+	const char *achv;
+	rb_get_args(argc, argv, "z", &achv RB_ARG_END);
+
+	STEAMSHIM_setAchievement(achv, true);
+	STEAMSHIM_storeStats();
+
+	return Qnil;
+}
+
 static VALUE newStringUTF8(const char *string, long length)
 {
 	return rb_enc_str_new(string, length, rb_utf8_encoding());
@@ -588,6 +606,12 @@ static void mriBindingExecute()
 
 	mriBindingInit();
 
+
+	STEAMSHIM_init();
+	_rb_define_module_function(rb_mKernel, "_steam_achievement_unlock",
+	                           _steamAchievementUnlock);
+
+
 	std::string &customScript = conf.customScript;
 	if (!customScript.empty())
 		runCustomScript(customScript);
@@ -599,6 +623,10 @@ static void mriBindingExecute()
 		showExc(exc, btData);
 
 	ruby_cleanup(0);
+
+
+	STEAMSHIM_deinit();
+
 
 	shState->rtData().rqTermAck.set();
 }

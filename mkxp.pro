@@ -182,6 +182,9 @@ SOURCES += \
 	src/midisource.cpp \
 	src/fluid-fun.cpp
 
+HEADERS += steamshim/steamshim_child.h
+SOURCES += steamshim/steamshim_child.c
+
 EMBED = \
 	shader/common.h \
 	shader/transSimple.frag \
