@@ -238,6 +238,14 @@ set(EMBEDDED_INPUT
 	assets/icon.png
 )
 
+set (STEAMSHIM_HEADERS
+	steamshim/steamshim_child.h
+)
+
+set (STEAMSHIM_SOURCE
+	steamshim/steamshim_child.c
+)
+
 if (RGSS2)
 	list(APPEND DEFINES
 		RGSS2
@@ -398,6 +406,8 @@ add_executable(${PROJECT_NAME} MACOSX_BUNDLE
 	${BINDING_HEADERS}
 	${BINDING_SOURCE}
 	${EMBEDDED_SOURCE}
+	${STEAMSHIM_HEADERS}
+	${STEAMSHIM_SOURCE}
 )
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
