@@ -57,12 +57,12 @@ struct TilemapVXPrivate : public ViewportElement, TileAtlasVX::Reader
 
 	Table *mapData;
 	Table *flags;
-	Vec2i offset;
+	Vec2i origin;
 
-	Vec2i dispPos;
-	/* Map viewport position */
+	/* Subregion of the map that is drawn to screen (map viewport) */
 	IntRect mapViewp;
-	Vec2i sceneOffset;
+	/* Position on screen the map subregion is drawn at */
+	Vec2i dispPos;
 	Scene::Geometry sceneGeo;
 
 	std::vector<SVertex> groundVert;
@@ -179,49 +179,31 @@ struct TilemapVXPrivate : public ViewportElement, TileAtlasVX::Reader
 		TileAtlasVX::build(atlas, bitmaps);
 	}
 
-	void updatePosition()
-	{
-		dispPos.x = -(offset.x - mapViewp.x * 32) + sceneOffset.x;
-		dispPos.y = -(offset.y - mapViewp.y * 32) + sceneOffset.y;
-	}
-
 	void updateMapViewport()
 	{
-		int tileOX, tileOY;
+		/* Note: We include one extra row at the top above
+		 * the normal map viewport to ensure the legs of table
+		 * tiles off screen are properly drawn */
 
-		Vec2i offs(offset.x-sceneOffset.x, offset.y-sceneOffset.y);
+		IntRect newMvp;
 
-		if (offs.x >= 0)
-			tileOX = offs.x / 32;
-		else
-			tileOX = -(-(offs.x-31) / 32);
+		const Vec2i combOrigin = origin + sceneGeo.orig;
+		const Vec2i geoSize = sceneGeo.rect.size();
 
-		if (offs.y >= 0)
-			tileOY = offs.y / 32;
-		else
-			tileOY = -(-(offs.y-31) / 32);
+		newMvp.setPos(getTilePos(combOrigin) - Vec2i(0, 1));
 
-		bool dirty = false;
+		/* Ensure that the size is big enough to cover the whole viewport,
+		 * and add one tile row/column as a buffer for scrolling */
+		newMvp.setSize((geoSize / 32) + !!(geoSize % 32) + Vec2i(1, 2));
 
-		if (tileOX < mapViewp.x || tileOX > mapViewp.x)
+		if (newMvp != mapViewp)
 		{
-			mapViewp.x = tileOX;
-			dirty = true;
-		}
-
-		if (tileOY < mapViewp.y || tileOY > mapViewp.y)
-		{
-			mapViewp.y = tileOY;
-			dirty = true;
-		}
-
-		if (dirty)
-		{
+			mapViewp = newMvp;
+			flashMap.setViewport(newMvp);
 			buffersDirty = true;
 		}
 
-		updatePosition();
-		flashMap.setViewport(mapViewp);
+		dispPos = sceneGeo.rect.pos() - wrap(combOrigin, 32) - Vec2i(0, 32);
 	}
 
 	static size_t quadBytes(size_t quads)
@@ -366,10 +348,6 @@ struct TilemapVXPrivate : public ViewportElement, TileAtlasVX::Reader
 
 	void onGeometryChange(const Scene::Geometry &geo)
 	{
-		const Vec2i geoSize = geo.rect.size();
-		mapViewp.setSize((geoSize / 32) + !!(geoSize % 32) + Vec2i(1));
-
-		sceneOffset = geo.offset();
 		sceneGeo = geo;
 
 		buffersDirty = true;
@@ -380,7 +358,7 @@ struct TilemapVXPrivate : public ViewportElement, TileAtlasVX::Reader
 
 	/* TileAtlasVX::Reader */
 	void onQuads(const FloatRect *t, const FloatRect *p,
-	              size_t n, bool overPlayer)
+	             size_t n, bool overPlayer)
 	{
 		SVertex *vert = allocVert(overPlayer ? aboveVert : groundVert, n*4);
 
@@ -467,8 +445,8 @@ TilemapVX::BitmapArray &TilemapVX::getBitmapArray()
 DEF_ATTR_RD_SIMPLE(TilemapVX, MapData, Table*, p->mapData)
 DEF_ATTR_RD_SIMPLE(TilemapVX, FlashData, Table*, p->flashMap.getData())
 DEF_ATTR_RD_SIMPLE(TilemapVX, Flags, Table*, p->flags)
-DEF_ATTR_RD_SIMPLE(TilemapVX, OX, int, p->offset.x)
-DEF_ATTR_RD_SIMPLE(TilemapVX, OY, int, p->offset.y)
+DEF_ATTR_RD_SIMPLE(TilemapVX, OX, int, p->origin.x)
+DEF_ATTR_RD_SIMPLE(TilemapVX, OY, int, p->origin.y)
 
 Viewport *TilemapVX::getViewport() const
 {
@@ -541,10 +519,10 @@ void TilemapVX::setOX(int value)
 {
 	guardDisposed();
 
-	if (p->offset.x == value)
+	if (p->origin.x == value)
 		return;
 
-	p->offset.x = value;
+	p->origin.x = value;
 	p->mapViewportDirty = true;
 }
 
@@ -552,10 +530,10 @@ void TilemapVX::setOY(int value)
 {
 	guardDisposed();
 
-	if (p->offset.y == value)
+	if (p->origin.y == value)
 		return;
 
-	p->offset.y = value;
+	p->origin.y = value;
 	p->mapViewportDirty = true;
 }
 

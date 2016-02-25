@@ -61,9 +61,9 @@ struct Vec4
 		return (x == other.x && y == other.y && z == other.z && w == other.w);
 	}
 
-	bool xyzHasEffect() const
+	bool xyzNotNull() const
 	{
-		return (x != 0.0 || y != 0.0 || z != 0.0);
+		return (x != 0.0f || y != 0.0f || z != 0.0f);
 	}
 };
 
@@ -86,6 +86,11 @@ struct Vec2i
 	bool operator==(const Vec2i &other) const
 	{
 		return x == other.x && y == other.y;
+	}
+
+	bool operator!=(const Vec2i &other) const
+	{
+		return !(*this == other);
 	}
 
 	Vec2i &operator+=(const Vec2i &value)
@@ -131,6 +136,11 @@ struct Vec2i
 		return Vec2i(x % value, y % value);
 	}
 
+	Vec2i operator&(unsigned value) const
+	{
+		return Vec2i(x & value, y & value);
+	}
+
 	Vec2i operator-() const
 	{
 		return Vec2i(-x, -y);
@@ -174,6 +184,11 @@ struct IntRect : SDL_Rect
 	{
 		return (x == other.x && y == other.y &&
 		        w == other.w && h == other.h);
+	}
+
+	bool operator!=(const IntRect &other) const
+	{
+		return !(*this == other);
 	}
 
 	Vec2i pos() const
@@ -259,13 +274,13 @@ struct NormValue
 
 	NormValue(int unNorm)
 	    : unNorm(unNorm),
-	      norm(unNorm / 255.0)
+	      norm(unNorm / 255.0f)
 	{}
 
 	void operator =(int value)
 	{
 		unNorm = clamp(value, 0, 255);
-		norm = unNorm / 255.0;
+		norm = unNorm / 255.0f;
 	}
 
 	bool operator ==(int value) const

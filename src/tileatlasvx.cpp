@@ -51,14 +51,14 @@ extern const int autotileVXRectsBN;
 /* Waterfall (C) autotile patterns */
 static const StaticRect autotileVXRectsC[] =
 {
-	{ 32.5, 0.5, 15, 31 },
-	{ 16.5, 0.5, 15, 31 },
-	{  0.0, 0.5, 15, 31 },
-	{ 16.5, 0.5, 15, 31 },
-	{ 32.5, 0.5, 15, 31 },
-	{ 48.5, 0.5, 15, 31 },
-	{  0.0, 0.5, 15, 31 },
-	{ 48.5, 0.5, 15, 31 }
+	{ 32.5f, 0.5f, 15.0f, 31.0f },
+	{ 16.5f, 0.5f, 15.0f, 31.0f },
+	{  0.0f, 0.5f, 15.0f, 31.0f },
+	{ 16.5f, 0.5f, 15.0f, 31.0f },
+	{ 32.5f, 0.5f, 15.0f, 31.0f },
+	{ 48.5f, 0.5f, 15.0f, 31.0f },
+	{  0.0f, 0.5f, 15.0f, 31.0f },
+	{ 48.5f, 0.5f, 15.0f, 31.0f }
 };
 
 static elementsN(autotileVXRectsC);
@@ -500,7 +500,7 @@ onTileA4(Reader &reader, int16_t tileID,
 	Vec2i orig = blitsA4[0].dst;
 	tileID -= 0x1700;
 
-	const int offY[] = { 0, 3, 5, 8, 10, 13 };
+	static const int offY[] = { 0, 3, 5, 8, 10, 13 };
 
 	int patternID  = tileID % 0x30;
 	int autotileID = tileID / 0x30;
