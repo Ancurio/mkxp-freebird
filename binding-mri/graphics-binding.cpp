@@ -202,6 +202,8 @@ DEF_GRA_PROP_I(Brightness)
 DEF_GRA_PROP_B(Fullscreen)
 DEF_GRA_PROP_B(ShowCursor)
 
+DEF_GRA_PROP_B(FixedAspectRatio)
+
 #define INIT_GRA_PROP_BIND(PropName, prop_name_s) \
 { \
 	_rb_define_module_function(module, prop_name_s, graphics##Get##PropName); \
@@ -221,6 +223,8 @@ void graphicsBindingInit()
 
 	INIT_GRA_PROP_BIND( FrameRate,  "frame_rate"  );
 	INIT_GRA_PROP_BIND( FrameCount, "frame_count" );
+
+	INIT_GRA_PROP_BIND( FixedAspectRatio, "fixed_aspect_ratio" );
 
 	if (rgssVer >= 2)
 	{

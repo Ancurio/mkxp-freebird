@@ -62,6 +62,8 @@ public:
 	DECL_ATTR( Fullscreen, bool )
 	DECL_ATTR( ShowCursor, bool )
 
+	DECL_ATTR( FixedAspectRatio, bool )
+
 	/* <internal> */
 	Scene *getScreen() const;
 	/* Repaint screen with static image until exitCond

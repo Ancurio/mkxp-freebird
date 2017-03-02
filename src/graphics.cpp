@@ -1024,6 +1024,20 @@ void Graphics::setShowCursor(bool value)
 	p->threadData->ethread->requestShowCursor(value);
 }
 
+bool Graphics::getFixedAspectRatio() const
+{
+	// It's a bit hacky to expose config values as a Graphics
+	// attribute, but there's really no point in state duplication
+	return shState->config().fixedAspectRatio;
+}
+
+void Graphics::setFixedAspectRatio(bool value)
+{
+	shState->config().fixedAspectRatio = value;
+	p->recalculateScreenSize(p->threadData);
+	p->updateScreenResoRatio(p->threadData);
+}
+
 Scene *Graphics::getScreen() const
 {
 	return &p->screen;
