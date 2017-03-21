@@ -1186,7 +1186,9 @@ void Bitmap::drawText(const IntRect &rect, const char *str, int align)
 
 	float squeeze = (float) rect.w / txtSurf->w;
 
-	if (squeeze > 1)
+	// If we're off by one pixel, it's likely that some bitmap was allocated
+	// without taking the shadow size into account
+	if (squeeze > 1 || txtSurf->w - rect.w == 1)
 		squeeze = 1;
 
 	FloatRect posRect(alignX, alignY, txtSurf->w * squeeze, txtSurf->h);
