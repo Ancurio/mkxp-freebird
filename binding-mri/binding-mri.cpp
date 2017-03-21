@@ -214,12 +214,25 @@ RB_METHOD(mkxpPuts)
 	return Qnil;
 }
 
+static uint8_t keyStatesMirrorAry[SDL_NUM_SCANCODES];
+
+// points at either EventThread::keyStates (which is continuously updated)
+// or keyStatesMirrorAry (which is a frame-local snapshot of the former)
+uint8_t *keyStatesMirror = EventThread::keyStates;
+
 RB_METHOD(mkxpRawKeyStates)
 {
 	RB_UNUSED_PARAM;
 
 	VALUE str = rb_str_new(0, sizeof(EventThread::keyStates));
-	memcpy(RSTRING_PTR(str), EventThread::keyStates, sizeof(EventThread::keyStates));
+
+	// copy keystates to a shadow array so the Input module uses the same snapshot
+	memcpy(keyStatesMirrorAry, EventThread::keyStates, sizeof(keyStatesMirrorAry));
+	memcpy(RSTRING_PTR(str), keyStatesMirrorAry, sizeof(keyStatesMirrorAry));
+
+	// let the Input module use our snapshot instead (Input will take care of resetting
+	// the pointer back to the EventThread array)
+	keyStatesMirror = keyStatesMirrorAry;
 
 	return str;
 }

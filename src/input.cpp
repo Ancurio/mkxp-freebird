@@ -66,6 +66,9 @@ struct Binding
 	Input::ButtonCode target;
 };
 
+// binding-mri.cpp
+extern uint8_t *keyStatesMirror;
+
 /* Keyboard binding */
 struct KbBinding : public Binding
 {
@@ -80,14 +83,14 @@ struct KbBinding : public Binding
 	{
 		/* Special case aliases */
 		if (source == SDL_SCANCODE_LSHIFT)
-			return EventThread::keyStates[source]
-			    || EventThread::keyStates[SDL_SCANCODE_RSHIFT];
+			return keyStatesMirror[source]
+			    || keyStatesMirror[SDL_SCANCODE_RSHIFT];
 
 		if (source == SDL_SCANCODE_RETURN)
-			return EventThread::keyStates[source]
-			    || EventThread::keyStates[SDL_SCANCODE_KP_ENTER];
+			return keyStatesMirror[source]
+			    || keyStatesMirror[SDL_SCANCODE_KP_ENTER];
 
-		return EventThread::keyStates[source];
+		return keyStatesMirror[source];
 	}
 
 	bool sourceRepeatable() const
@@ -606,6 +609,9 @@ void Input::update()
 
 	/* Poll all bindings */
 	p->pollBindings(repeatCand);
+
+	// reset keystate source from potential mirror to EventThread source array
+	keyStatesMirror = EventThread::keyStates;
 
 	/* Check for new repeating key */
 	if (repeatCand != None && repeatCand != p->repeating)
