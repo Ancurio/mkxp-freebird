@@ -86,6 +86,12 @@
 # defScreenH=480
 
 
+# Override the game window title
+# (default: none)
+#
+# windowTitle=Custom Title
+
+
 # Enforce a static frame rate
 # (0 = disabled)
 #

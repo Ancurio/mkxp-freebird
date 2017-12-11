@@ -121,7 +121,7 @@ struct SpritePrivate
 
 	void recomputeBushDepth()
 	{
-		if (!bitmap)
+		if (nullOrDisposed(bitmap))
 			return;
 
 		/* Calculate effective (normalized) bush depth */
@@ -137,18 +137,15 @@ struct SpritePrivate
 		FloatRect rect = srcRect->toFloatRect();
 		Vec2i bmSize;
 
-		if (bitmap)
+		if (!nullOrDisposed(bitmap))
 			bmSize = Vec2i(bitmap->width(), bitmap->height());
-
-		if (mirrored)
-			rect = rect.hFlipped();
 
 		/* Clamp the rectangle so it doesn't reach outside
 		 * the bitmap bounds */
 		rect.w = clamp<int>(rect.w, 0, bmSize.x-rect.x);
 		rect.h = clamp<int>(rect.h, 0, bmSize.y-rect.y);
 
-		quad.setTexRect(rect);
+		quad.setTexRect(mirrored ? rect.hFlipped() : rect);
 
 		quad.setPosRect(FloatRect(0, 0, rect.w, rect.h));
 		recomputeBushDepth();
