@@ -33,7 +33,6 @@ fileIntFreeInstance(void *inst)
 {
 	SDL_RWops *ops = static_cast<SDL_RWops*>(inst);
 
-	SDL_RWclose(ops);
 	SDL_FreeRW(ops);
 }
 
@@ -42,16 +41,14 @@ DEF_TYPE_CUSTOMFREE(FileInt, fileIntFreeInstance);
 static VALUE
 fileIntForPath(const char *path, bool rubyExc)
 {
-	SDL_RWops *ops = SDL_AllocRW();
+	SDL_RWops *ops;
 
 	try
 	{
-		shState->fileSystem().openReadRaw(*ops, path);
+		ops = shState->fileSystem().openReadRaw(path);
 	}
 	catch (const Exception &e)
 	{
-		SDL_FreeRW(ops);
-
 		if (rubyExc)
 			raiseRbExc(e);
 		else

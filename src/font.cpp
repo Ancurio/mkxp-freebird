@@ -167,14 +167,13 @@ _TTF_Font *SharedFontState::getFont(std::string family,
 		const char *path = !req.regular.empty()
 		                 ? req.regular.c_str() : req.other.c_str();
 
-		ops = SDL_AllocRW();
-		shState->fileSystem().openReadRaw(*ops, path, true);
+		ops = shState->fileSystem().openReadRaw(path);
 	}
 
 	// FIXME 0.9 is guesswork at this point
 //	float gamma = (96.0/45.0)*(5.0/14.0)*(size-5);
-//	font = TTF_OpenFontRW(ops, 1, gamma /** .90*/);
-	font = TTF_OpenFontRW(ops, 1, size* 0.90f);
+//	font = TTF_OpenFontRW(ops, 0, gamma /** .90*/);
+	font = TTF_OpenFontRW(ops, 0, size* 0.90f);
 
 	if (!font)
 		throw Exception(Exception::SDLError, "%s", SDL_GetError());

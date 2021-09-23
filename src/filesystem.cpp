@@ -222,15 +222,6 @@ static int SDL_RWopsClose(SDL_RWops *ops)
 	return (result != 0) ? 0 : -1;
 }
 
-static int SDL_RWopsCloseFree(SDL_RWops *ops)
-{
-	int result = SDL_RWopsClose(ops);
-
-	SDL_FreeRW(ops);
-
-	return result;
-}
-
 /* Copies the first srcN characters from src into dst,
  * or the full string if srcN == -1. Never writes more
  * than dstMax, and guarantees dst to be null terminated.
@@ -272,18 +263,13 @@ findExt(const char *filename)
 
 static void
 initReadOps(PHYSFS_File *handle,
-            SDL_RWops &ops,
-            bool freeOnClose)
+            SDL_RWops &ops)
 {
 	ops.size  = SDL_RWopsSize;
 	ops.seek  = SDL_RWopsSeek;
 	ops.read  = SDL_RWopsRead;
 	ops.write = SDL_RWopsWrite;
-
-	if (freeOnClose)
-		ops.close = SDL_RWopsCloseFree;
-	else
-		ops.close = SDL_RWopsClose;
+	ops.close = SDL_RWopsClose;
 
 	ops.type = SDL_RWOPS_PHYSFS;
 	ops.hidden.unknown.data1 = handle;
@@ -504,7 +490,7 @@ fontSetEnumCB (void *data, const char *dir, const char *fname)
 		return PHYSFS_ENUM_ERROR;
 
 	SDL_RWops ops;
-	initReadOps(handle, ops, false);
+	initReadOps(handle, ops);
 
 	d->sfs->initFontSetCB(ops, filename);
 
@@ -620,7 +606,7 @@ openReadEnumCB(void *d, const char *dirpath, const char *filename)
 		return PHYSFS_ENUM_ERROR;
 	}
 
-	initReadOps(phys, data.ops, false);
+	initReadOps(phys, data.ops);
 
 	const char *ext = findExt(filename);
 
@@ -684,14 +670,27 @@ void FileSystem::openRead(OpenHandler &handler, const char *filename)
 		throw Exception(Exception::NoFileError, "%s", filename);
 }
 
-void FileSystem::openReadRaw(SDL_RWops &ops,
-                             const char *filename,
-                             bool freeOnClose)
+SDL_RWops *FileSystem::openReadRaw(const char *filename)
 {
-	PHYSFS_File *handle = PHYSFS_openRead(filename);
-	assert(handle);
+	SDL_RWops *ops;
 
-	initReadOps(handle, ops, freeOnClose);
+	PHYSFS_File *handle = PHYSFS_openRead(filename);
+	if (!handle) {
+		Debug() << "Couldn't open " << filename << " via PhysFS; trying normal FILE*";
+		ops = SDL_RWFromFile(filename, "rb");
+
+		if (!ops) {
+			Debug() << "FILE* path failed too..";
+			throw Exception(Exception::NoFileError, "%s", filename);
+		}
+	}
+	else
+	{
+		ops = SDL_AllocRW();
+		initReadOps(handle, *ops);
+	}
+
+	return ops;
 }
 
 bool FileSystem::exists(const char *filename)

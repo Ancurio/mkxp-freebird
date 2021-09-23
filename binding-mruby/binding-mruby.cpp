@@ -273,23 +273,23 @@ runRMXPScripts(mrb_state *mrb, mrbc_context *ctx)
 
 	/* We use a secondary util state to unmarshal the scripts */
 	mrb_state *scriptMrb = mrb_open();
-	SDL_RWops ops;
 
-	shState->fileSystem().openReadRaw(ops, scriptPack.c_str());
+	SDL_RWops *ops = shState->fileSystem().openReadRaw(scriptPack.c_str());
 
 	mrb_value scriptArray = mrb_nil_value();
 	std::string readError;
 
 	try
 	{
-		scriptArray = marshalLoadInt(scriptMrb, &ops);
+		scriptArray = marshalLoadInt(scriptMrb, ops);
 	}
 	catch (const Exception &e)
 	{
 		readError = std::string(": ") + e.msg;
 	}
 
-	SDL_RWclose(&ops);
+	SDL_RWclose(ops);
+	SDL_FreeRW(ops);
 
 	if (!mrb_array_p(scriptArray))
 	{
