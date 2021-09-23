@@ -37,7 +37,7 @@
 #include <algorithm>
 #include <assert.h>
 
-const Vec2i winSize(540, 356);
+const Vec2i winSize(580, 356);
 
 const uint8_t cBgNorm = 50;
 const uint8_t cBgDark = 20;
@@ -63,16 +63,16 @@ struct VButton
 {
 	BTN_STRING(Up),
 	BTN_STRING(Down),
-	BTN_STRING(L),
+	{ Input::L, "-" },
 	BTN_STRING(Left),
 	BTN_STRING(Right),
-	BTN_STRING(R),
-	BTN_STRING(A),
-	BTN_STRING(B),
-	BTN_STRING(C),
-	BTN_STRING(X),
-	BTN_STRING(Y),
-	BTN_STRING(Z)
+	{ Input::R, "-" },
+	{ Input::A, "Sprint" },
+	{ Input::B, "Cancel" },
+	{ Input::C, "Action" },
+	{ Input::X, "-" },
+	{ Input::Y, "-" },
+	{ Input::Z, "-" },
 };
 
 static elementsN(vButtons);
@@ -764,7 +764,7 @@ void Widget::click(int x, int y, uint8_t button)
 }
 
 /* Ratio of cell area to total widget width */
-#define BW_CELL_R 0.75f
+#define BW_CELL_R 0.69f
 
 void BindingWidget::drawHandler(SDL_Surface *surf)
 {
