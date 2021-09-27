@@ -23,6 +23,8 @@ typedef int PipeType;
 #define NULLPIPE -1
 #endif
 
+#include <stdio.h>
+#include <signal.h>
 #include "steamshim_child.h"
 
 #define DEBUGPIPE 1
@@ -69,7 +71,7 @@ static void closePipe(PipeType fd)
 static char *getEnvVar(const char *key, char *buf, const size_t _buflen)
 {
     const DWORD buflen = (DWORD) _buflen;
-    const DWORD rc = GetEnvironmentVariableA(key, val, buflen);
+    const DWORD rc = GetEnvironmentVariableA(key, buf, buflen);
     /* rc doesn't count null char, hence "<". */
     return ((rc > 0) && (rc < buflen)) ? NULL : buf;
 } /* getEnvVar */
@@ -185,7 +187,9 @@ int STEAMSHIM_init(void)
         return 0;
     } /* if */
 
+#ifndef _WIN32
     signal(SIGPIPE, SIG_IGN);
+#endif
 
     dbgpipe("Child init success!\n");
     return 1;
@@ -205,7 +209,9 @@ void STEAMSHIM_deinit(void)
 
     GPipeRead = GPipeWrite = NULLPIPE;
 
+#ifndef _WIN32
     signal(SIGPIPE, SIG_DFL);
+#endif
 } /* STEAMSHIM_deinit */
 
 static inline int isAlive(void)
