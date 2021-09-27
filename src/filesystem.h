@@ -60,7 +60,9 @@ public:
 	              const char *filename);
 
 	/* Circumvents extension supplementing */
-	SDL_RWops *openReadRaw(const char *filename);
+	void openReadRaw(SDL_RWops &ops,
+	                 const char *filename,
+	                 bool freeOnClose = false);
 
 	/* Does not perform extension supplementing */
 	bool exists(const char *filename);
