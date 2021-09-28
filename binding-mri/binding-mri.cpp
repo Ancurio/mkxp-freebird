@@ -29,6 +29,7 @@
 #include "debugwriter.h"
 #include "graphics.h"
 #include "audio.h"
+#include "font.h"
 #include "boost-hash.h"
 
 #include "steamshim/steamshim_child.h"
@@ -362,6 +363,18 @@ RB_METHOD(_steamAchievementUnlock)
 	return Qnil;
 }
 
+RB_METHOD(_mkxp_set_default_font_family)
+{
+	RB_UNUSED_PARAM;
+
+	const char *family;
+	rb_get_args(argc, argv, "z", &family RB_ARG_END);
+
+	shState->fontState().setDefaultFontFamily(family);
+
+	return Qnil;
+}
+
 static VALUE newStringUTF8(const char *string, long length)
 {
 	return rb_enc_str_new(string, length, rb_utf8_encoding());
@@ -643,6 +656,8 @@ static void mriBindingExecute()
 	_rb_define_module_function(rb_mKernel, "_steam_achievement_unlock",
 	                           _steamAchievementUnlock);
 
+	_rb_define_module_function(rb_mKernel, "_mkxp_set_default_font_family",
+	                           _mkxp_set_default_font_family);
 
 	std::string &customScript = conf.customScript;
 	if (!customScript.empty())

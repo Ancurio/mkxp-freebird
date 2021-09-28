@@ -54,6 +54,8 @@ public:
 
 	static _TTF_Font *openBundled(int size);
 
+	void setDefaultFontFamily(const std::string &family);
+
 private:
 	SharedFontStatePrivate *p;
 };
