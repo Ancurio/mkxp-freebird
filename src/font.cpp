@@ -138,7 +138,6 @@ _TTF_Font *SharedFontState::getFont(std::string family,
                                     int size)
 {
 	if (family.empty()) {
-		Debug() << "Invalid font family" << family << "requested, substituting internal default";
 		family = p->defaultFamily;
 	}
 
