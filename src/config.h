@@ -84,6 +84,12 @@ struct Config
 		int sourceCount;
 	} SE;
 
+	struct
+	{
+		float bgs;
+		float se;
+	} volume;
+
 	bool useScriptNames;
 
 	std::string customScript;

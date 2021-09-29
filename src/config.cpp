@@ -183,6 +183,8 @@ void Config::read(int argc, char *argv[])
 	PO_DESC(midi.chorus, bool, false) \
 	PO_DESC(midi.reverb, bool, false) \
 	PO_DESC(SE.sourceCount, int, 6) \
+	PO_DESC(volume.bgs, float, 1.0f) \
+	PO_DESC(volume.se, float, 1.0f) \
 	PO_DESC(customScript, std::string, "") \
 	PO_DESC(pathCache, bool, true) \
 	PO_DESC(useScriptNames, bool, false)

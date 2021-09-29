@@ -73,6 +73,8 @@ struct AudioPrivate
 		meWatch.state = MeNotPlaying;
 		meWatch.thread = createSDLThread
 			<AudioPrivate, &AudioPrivate::meWatchFun>(this, "audio_mewatch");
+
+		bgs.setVolume(AudioStream::Config, rtData.config.volume.bgs);
 	}
 
 	~AudioPrivate()

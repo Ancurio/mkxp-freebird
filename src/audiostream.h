@@ -49,6 +49,7 @@ struct AudioStream
 		FadeOut,
 		FadeIn,
 		External,
+		Config,
 
 		VolumeTypeCount
 	};

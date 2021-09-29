@@ -93,7 +93,8 @@ SoundEmitter::SoundEmitter(const Config &conf)
       srcCount(conf.SE.sourceCount),
       alSrcs(srcCount),
       atchBufs(srcCount),
-      srcPrio(srcCount)
+      srcPrio(srcCount),
+      configVolume(conf.volume.se)
 {
 	for (size_t i = 0; i < srcCount; ++i)
 	{
@@ -172,7 +173,7 @@ void SoundEmitter::play(const std::string &filename,
 	if (switchBuffer)
 		AL::Source::attachBuffer(src, buffer->alBuffer);
 
-	AL::Source::setVolume(src, _volume * GLOBAL_VOLUME);
+	AL::Source::setVolume(src, _volume * configVolume * GLOBAL_VOLUME);
 	AL::Source::setPitch(src, _pitch);
 
 	AL::Source::play(src);

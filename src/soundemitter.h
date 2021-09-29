@@ -49,6 +49,9 @@ struct SoundEmitter
 	/* Indices of sources, sorted by priority (lowest first) */
 	std::vector<size_t> srcPrio;
 
+	/* Constant premultiplier */
+	float configVolume;
+
 	SoundEmitter(const Config &conf);
 	~SoundEmitter();
 
