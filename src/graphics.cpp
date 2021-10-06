@@ -37,6 +37,7 @@
 #include "intrulist.h"
 #include "binding.h"
 #include "debugwriter.h"
+#include "steamshim/steamshim_child.h"
 
 #include <SDL_video.h>
 #include <SDL_timer.h>
@@ -687,6 +688,8 @@ void Graphics::update()
 
 	p->checkResize();
 	p->redrawScreen();
+
+	STEAMSHIM_pump();
 }
 
 void Graphics::freeze()
