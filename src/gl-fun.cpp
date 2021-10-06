@@ -99,7 +99,14 @@ void initGLFunctions()
 	int glMajor = *ver - '0';
 
 	if (glMajor < 2)
-		throw EXC("At least OpenGL (ES) 2.0 is required");
+	{
+		throw Exception(Exception::MKXPError,
+		                "At least OpenGL (ES) 2.0 is required\n\nDriver:\n%s\n%s\n%s\n%s",
+		                gl.GetString(GL_VENDOR),
+		                gl.GetString(GL_RENDERER),
+		                gl.GetString(GL_VERSION),
+		                gl.GetString(GL_SHADING_LANGUAGE_VERSION));
+	}
 
 	if (gles)
 	{
