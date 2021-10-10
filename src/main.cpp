@@ -41,6 +41,10 @@
 #include "binding.h"
 
 #ifdef __WINDOWS__
+#include <windows.h>
+#include <shellscalingapi.h>
+#include <comdef.h>
+
 #include "resource.h"
 
 // Try to force dedicated GPU
@@ -204,6 +208,16 @@ int main(int argc, char *argv[])
 	SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, "0");
 //	SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0");
 
+#ifdef __WINDOWS__
+	SetProcessDPIAware();
+//	HRESULT hr = SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+//	if (FAILED(hr))
+//	{
+//		_com_error err(hr);
+//		fwprintf(stderr, L"SetProcessDpiAwareness: %s\n", err.ErrorMessage());
+//	}
+#endif
+
 	/* initialize SDL first */
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK) < 0)
 	{
@@ -276,7 +290,7 @@ int main(int argc, char *argv[])
 	}
 
 	SDL_Window *win;
-	Uint32 winFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_INPUT_FOCUS;
+	Uint32 winFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_ALLOW_HIGHDPI;
 
 	if (conf.winResizable)
 		winFlags |= SDL_WINDOW_RESIZABLE;

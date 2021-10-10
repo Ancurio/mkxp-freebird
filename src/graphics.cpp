@@ -477,6 +477,11 @@ struct GraphicsPrivate
 	TEXFBO frozenScene;
 	Quad screenQuad;
 
+	Vec2i integerScaleFactor;
+	TEXFBO integerScaleBuffer;
+	bool integerScaleActive;
+	bool integerScaleFixedAspectRatio;
+
 	/* Global list of all live Disposables
 	 * (disposed on reset) */
 	IntruList<Disposable> dispList;
@@ -492,7 +497,10 @@ struct GraphicsPrivate
 	      frameCount(0),
 	      brightness(255),
 	      fpsLimiter(frameRate),
-	      frozen(false)
+	      frozen(false),
+	      integerScaleFactor(0, 0),
+	      integerScaleActive(true),
+	      integerScaleFixedAspectRatio(rtData->config.fixedAspectRatio)
 	{
 		recalculateScreenSize(rtData);
 		updateScreenResoRatio(rtData);
@@ -500,6 +508,12 @@ struct GraphicsPrivate
 		TEXFBO::init(frozenScene);
 		TEXFBO::allocEmpty(frozenScene, scRes.x, scRes.y);
 		TEXFBO::linkFBO(frozenScene);
+
+		if (integerScaleActive)
+		{
+			integerScaleFactor = Vec2i(1, 1);
+			rebuildIntegerScaleBuffer();
+		}
 
 		FloatRect screenRect(0, 0, scRes.x, scRes.y);
 		screenQuad.setTexPosRect(screenRect, screenRect);
@@ -510,6 +524,7 @@ struct GraphicsPrivate
 	~GraphicsPrivate()
 	{
 		TEXFBO::fini(frozenScene);
+		TEXFBO::fini(integerScaleBuffer);
 	}
 
 	void updateScreenResoRatio(RGSSThreadData *rtData)
@@ -544,14 +559,76 @@ struct GraphicsPrivate
 		scOffset.y = (winSize.y - scSize.y) / 2.f;
 	}
 
+	static int findHighestFittingScale(int base, int target)
+	{
+		int scale = 1;
+
+		while (base * scale <= target)
+			scale += 1;
+
+		Debug() << base << target << scale - 1;
+
+		return scale - 1;
+	}
+
+	/* Returns whether a new scale was found */
+	bool findHighestIntegerScale()
+	{
+		Vec2i newScale(findHighestFittingScale(scRes.x, winSize.x),
+		               findHighestFittingScale(scRes.y, winSize.y));
+
+		if (integerScaleFixedAspectRatio)
+		{
+			/* Limit both factors to the smaller of the two */
+			newScale.x = newScale.y = std::min(newScale.x, newScale.y);
+		}
+
+		if (newScale == integerScaleFactor)
+			return false;
+
+		integerScaleFactor = newScale;
+		Debug() << "Found new scale:" << newScale.x << newScale.y;
+		return true;
+	}
+
+	void rebuildIntegerScaleBuffer()
+	{
+		TEXFBO::fini(integerScaleBuffer);
+		TEXFBO::init(integerScaleBuffer);
+		TEXFBO::allocEmpty(integerScaleBuffer, scRes.x * integerScaleFactor.x,
+		                                       scRes.y * integerScaleFactor.y);
+		TEXFBO::linkFBO(integerScaleBuffer);
+
+		Debug() << "New buffer size:" << integerScaleBuffer.width << integerScaleBuffer.height;
+	}
+
+	bool integerScaleStepApplicable() const
+	{
+		if (!integerScaleActive)
+			return false;
+
+		if (integerScaleFactor.x < 1 || integerScaleFactor.y < 1) // XXX should be < 2, this is for testing only
+			return false;
+
+		return true;
+	}
+
 	void checkResize()
 	{
 		if (threadData->windowSizeMsg.poll(winSize))
 		{
+			/* Query the acutal size in pixels, not units */
+			SDL_GL_GetDrawableSize(threadData->window, &winSize.x, &winSize.y);
+			Debug() << "Reported GL drawable size:" << winSize.x << winSize.y;
+
 			/* some GL drivers change the viewport on window resize */
 			glState.viewport.refresh();
 			recalculateScreenSize(threadData);
 			updateScreenResoRatio(threadData);
+
+			if (integerScaleActive)
+				if (findHighestIntegerScale())
+					rebuildIntegerScaleBuffer();
 
 			SDL_Rect screen = { scOffset.x, scOffset.y, scSize.x, scSize.y };
 			threadData->ethread->notifyGameScreenChange(screen);
@@ -600,7 +677,12 @@ struct GraphicsPrivate
 
 	void metaBlitBufferFlippedScaled()
 	{
-		GLMeta::blitRectangle(IntRect(0, 0, scRes.x, scRes.y),
+		metaBlitBufferFlippedScaled(scRes);
+	}
+
+	void metaBlitBufferFlippedScaled(const Vec2i &sourceSize)
+	{
+		GLMeta::blitRectangle(IntRect(0, 0, sourceSize.x, sourceSize.y),
 		                      IntRect(scOffset.x, scSize.y+scOffset.y, scSize.x, -scSize.y),
 		                      threadData->config.smoothScaling);
 	}
@@ -609,11 +691,36 @@ struct GraphicsPrivate
 	{
 		screen.composite();
 
+		if (integerScaleStepApplicable())
+		{
+			assert(integerScaleBuffer.tex != TEX::ID(0));
+			GLMeta::blitBegin(integerScaleBuffer);
+			GLMeta::blitSource(screen.getPP().frontBuffer());
+
+			GLMeta::blitRectangle(IntRect(0, 0, scRes.x, scRes.y),
+			                      IntRect(0, 0, integerScaleBuffer.width, integerScaleBuffer.height),
+			                      false);
+
+			GLMeta::blitEnd();
+		}
+
 		GLMeta::blitBeginScreen(winSize);
-		GLMeta::blitSource(screen.getPP().frontBuffer());
+
+		Vec2i sourceSize;
+
+		if (integerScaleActive)
+		{
+			GLMeta::blitSource(integerScaleBuffer);
+			sourceSize = Vec2i(integerScaleBuffer.width, integerScaleBuffer.height);
+		}
+		else
+		{
+			GLMeta::blitSource(screen.getPP().frontBuffer());
+			sourceSize = scRes;
+		}
 
 		FBO::clear();
-		metaBlitBufferFlippedScaled();
+		metaBlitBufferFlippedScaled(sourceSize);
 
 		GLMeta::blitEnd();
 
