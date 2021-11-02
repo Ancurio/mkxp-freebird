@@ -58,6 +58,7 @@ public:
 	/* Non-standard extensions */
 	int mouseX();
 	int mouseY();
+	int scrollV();
 
 private:
 	Input(const RGSSThreadData &rtData);

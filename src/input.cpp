@@ -28,6 +28,7 @@
 
 #include <SDL_scancode.h>
 #include <SDL_mouse.h>
+#include <SDL_atomic.h>
 
 #include <vector>
 #include <string.h>
@@ -287,6 +288,9 @@ struct InputPrivate
 	Input::ButtonCode repeating;
 	unsigned int repeatCount;
 
+	/* Cumulative vertical scroll distance since last update call */
+	int vScrollDistance;
+
 	struct
 	{
 		int active;
@@ -322,6 +326,8 @@ struct InputPrivate
 		dir4Data.previous = Input::None;
 
 		dir8Data.active = 0;
+
+		vScrollDistance = 0;
 	}
 
 	inline ButtonState &getStateCheck(int code)
@@ -640,6 +646,9 @@ void Input::update()
 	}
 
 	p->repeating = None;
+
+	/* Fetch new cumulative scroll distance and reset counter */
+	p->vScrollDistance = SDL_AtomicSet(&EventThread::verticalScrollDistance, 0);
 }
 
 bool Input::isPressed(int button)
@@ -679,6 +688,11 @@ int Input::mouseY()
 	RGSSThreadData &rtData = shState->rtData();
 
 	return (EventThread::mouseState.y - rtData.screenOffset.y) * rtData.sizeResoRatio.y;
+}
+
+int Input::scrollV()
+{
+	return p->vScrollDistance;
 }
 
 Input::~Input()

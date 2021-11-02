@@ -31,6 +31,7 @@
 #include <SDL_joystick.h>
 #include <SDL_mouse.h>
 #include <SDL_mutex.h>
+#include <SDL_atomic.h>
 
 #include <string>
 
@@ -76,6 +77,7 @@ public:
 	static JoyState joyState;
 	static MouseState mouseState;
 	static TouchState touchState;
+	static SDL_atomic_t verticalScrollDistance;
 
 	static bool allocUserEvents();
 
