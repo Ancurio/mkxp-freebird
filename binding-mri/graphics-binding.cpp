@@ -20,6 +20,7 @@
 */
 
 #include "graphics.h"
+#include "eventthread.h"
 #include "sharedstate.h"
 #include "binding-util.h"
 #include "binding-types.h"
@@ -195,6 +196,18 @@ RB_METHOD(graphicsPlayMovie)
 	return Qnil;
 }
 
+RB_METHOD(graphicsResizeWindow)
+{
+	RB_UNUSED_PARAM;
+
+	int width, height;
+	rb_get_args(argc, argv, "ii", &width, &height RB_ARG_END);
+
+	shState->eThread().requestWindowResize(width, height);
+
+	return Qnil;
+}
+
 DEF_GRA_PROP_I(FrameRate)
 DEF_GRA_PROP_I(FrameCount)
 DEF_GRA_PROP_I(Brightness)
@@ -252,4 +265,6 @@ void graphicsBindingInit()
 
 	INIT_GRA_PROP_BIND( Fullscreen, "fullscreen"  );
 	INIT_GRA_PROP_BIND( ShowCursor, "show_cursor" );
+
+	_rb_define_module_function(module, "resize_window", graphicsResizeWindow);
 }
