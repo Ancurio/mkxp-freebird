@@ -433,6 +433,18 @@ RB_METHOD(bitmapInitializeCopy)
 	return self;
 }
 
+RB_METHOD(bitmapWriteToPng)
+{
+	Bitmap *b = getPrivateData<Bitmap>(self);
+	const char *filename;
+
+	rb_get_args(argc, argv, "z", &filename RB_ARG_END);
+
+	b->writeToPng(filename);
+
+	return self;
+}
+
 
 void
 bitmapBindingInit()
@@ -465,6 +477,8 @@ bitmapBindingInit()
 	_rb_define_method(klass, "blur",               bitmapBlur);
 	_rb_define_method(klass, "radial_blur",        bitmapRadialBlur);
 	}
+
+	_rb_define_method(klass, "write_to_png", bitmapWriteToPng);
 
 	INIT_PROP_BIND(Bitmap, Font, "font");
 }

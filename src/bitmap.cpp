@@ -245,6 +245,20 @@ struct BitmapPrivate
 
 		self->modified();
 	}
+
+	void downloadToSurface()
+	{
+		if (!surface)
+			allocSurface();
+
+		FBO::bind(gl.fbo);
+
+		glState.viewport.pushSet(IntRect(0, 0, gl.width, gl.height));
+
+		::gl.ReadPixels(0, 0, gl.width, gl.height, GL_RGBA, GL_UNSIGNED_BYTE, surface->pixels);
+
+		glState.viewport.pop();
+	}
 };
 
 struct BitmapOpenHandler : FileSystem::OpenHandler
@@ -900,18 +914,7 @@ Color Bitmap::getPixel(int x, int y) const
 	if (x < 0 || y < 0 || x >= width() || y >= height())
 		return Vec4();
 
-	if (!p->surface)
-	{
-		p->allocSurface();
-
-		FBO::bind(p->gl.fbo);
-
-		glState.viewport.pushSet(IntRect(0, 0, width(), height()));
-
-		gl.ReadPixels(0, 0, width(), height(), GL_RGBA, GL_UNSIGNED_BYTE, p->surface->pixels);
-
-		glState.viewport.pop();
-	}
+	p->downloadToSurface();
 
 	uint32_t pixel = getPixelAt(p->surface, p->format, x, y);
 
@@ -1398,6 +1401,12 @@ void Bitmap::setFont(Font &value)
 void Bitmap::setInitFont(Font *value)
 {
 	p->font = value;
+}
+
+void Bitmap::writeToPng(const char *filename)
+{
+	p->downloadToSurface();
+	IMG_SavePNG(p->surface, filename);
 }
 
 TEXFBO &Bitmap::getGLTypes()

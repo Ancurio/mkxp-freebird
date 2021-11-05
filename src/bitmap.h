@@ -105,6 +105,9 @@ public:
 	 * use at construction */
 	void setInitFont(Font *value);
 
+	/* extensions */
+	void writeToPng(const char *filename);
+
 	/* <internal> */
 	TEXFBO &getGLTypes();
 	SDL_Surface *megaSurface() const;
