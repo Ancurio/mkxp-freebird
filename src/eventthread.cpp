@@ -101,6 +101,36 @@ bool EventThread::allocUserEvents()
 	return true;
 }
 
+static void writeResizeRequest(SDL_WindowEvent &event, int w, int h, bool recenter)
+{
+	event.data1 = w;
+	event.data2 = h;
+	event.padding3 = recenter ? 1 : 0;
+}
+
+static void handleResizeRequest(SDL_Window *win, SDL_WindowEvent &event)
+{
+	int newWidth = event.data1;
+	int newHeight = event.data2;
+	bool recenter = event.padding3 == 1;
+
+	if (recenter)
+	{
+		int display = SDL_GetWindowDisplayIndex(win);
+		if (display >= 0)
+		{
+			SDL_DisplayMode dm;
+			SDL_GetDesktopDisplayMode(display, &dm);
+			int newX = (dm.w - newWidth) / 2;
+			int newY = (dm.h - newHeight) / 2;
+
+			SDL_SetWindowPosition(win, newX, newY);
+		}
+	}
+
+	SDL_SetWindowSize(win, newWidth, newHeight);
+}
+
 EventThread::EventThread()
     : fullscreen(false),
       showCursor(false)
@@ -410,7 +440,7 @@ void EventThread::process(RGSSThreadData &rtData)
 				break;
 
 			case REQUEST_WINRESIZE :
-				SDL_SetWindowSize(win, event.window.data1, event.window.data2);
+				handleResizeRequest(win, event.window);
 				break;
 
 			case REQUEST_MESSAGEBOX :
@@ -581,12 +611,11 @@ void EventThread::requestFullscreenMode(bool mode)
 	SDL_PushEvent(&event);
 }
 
-void EventThread::requestWindowResize(int width, int height)
+void EventThread::requestWindowResize(int width, int height, bool recenter)
 {
 	SDL_Event event;
 	event.type = usrIdStart + REQUEST_WINRESIZE;
-	event.window.data1 = width;
-	event.window.data2 = height;
+	writeResizeRequest(event.window, width, height, recenter);
 	SDL_PushEvent(&event);
 }
 

@@ -201,9 +201,10 @@ RB_METHOD(graphicsResizeWindow)
 	RB_UNUSED_PARAM;
 
 	int width, height;
-	rb_get_args(argc, argv, "ii", &width, &height RB_ARG_END);
+	bool recenter = false;
+	rb_get_args(argc, argv, "ii|b", &width, &height, &recenter RB_ARG_END);
 
-	shState->eThread().requestWindowResize(width, height);
+	shState->eThread().requestWindowResize(width, height, recenter);
 
 	return Qnil;
 }
