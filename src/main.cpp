@@ -276,7 +276,7 @@ int main(int argc, char *argv[])
 	}
 
 	SDL_Window *win;
-	Uint32 winFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_INPUT_FOCUS;
+	Uint32 winFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_ALLOW_HIGHDPI;
 
 	if (conf.winResizable)
 		winFlags |= SDL_WINDOW_RESIZABLE;
