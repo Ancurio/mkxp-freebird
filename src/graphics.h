@@ -63,6 +63,9 @@ public:
 	DECL_ATTR( ShowCursor, bool )
 
 	DECL_ATTR( FixedAspectRatio, bool )
+	DECL_ATTR( SmoothScaling, bool )
+	DECL_ATTR( IntegerScaling, bool )
+	DECL_ATTR( LastMileScaling, bool )
 
 	/* <internal> */
 	Scene *getScreen() const;

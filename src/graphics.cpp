@@ -477,6 +477,11 @@ struct GraphicsPrivate
 	TEXFBO frozenScene;
 	Quad screenQuad;
 
+	Vec2i integerScaleFactor;
+	TEXFBO integerScaleBuffer;
+	bool integerScaleActive;
+	bool integerLastMileScaling;
+
 	/* Global list of all live Disposables
 	 * (disposed on reset) */
 	IntruList<Disposable> dispList;
@@ -492,9 +497,18 @@ struct GraphicsPrivate
 	      frameCount(0),
 	      brightness(255),
 	      fpsLimiter(frameRate),
-	      frozen(false)
+	      frozen(false),
+	      integerScaleFactor(0, 0),
+	      integerScaleActive(rtData->config.integerScaling.active),
+	      integerLastMileScaling(rtData->config.integerScaling.lastMileScaling)
 	{
-		recalculateScreenSize(rtData);
+		if (integerScaleActive)
+		{
+			integerScaleFactor = Vec2i(1, 1);
+			rebuildIntegerScaleBuffer();
+		}
+
+		recalculateScreenSize(rtData->config.fixedAspectRatio);
 		updateScreenResoRatio(rtData);
 
 		TEXFBO::init(frozenScene);
@@ -510,6 +524,7 @@ struct GraphicsPrivate
 	~GraphicsPrivate()
 	{
 		TEXFBO::fini(frozenScene);
+		TEXFBO::fini(integerScaleBuffer);
 	}
 
 	void updateScreenResoRatio(RGSSThreadData *rtData)
@@ -522,13 +537,24 @@ struct GraphicsPrivate
 	}
 
 	/* Enforces fixed aspect ratio, if desired */
-	void recalculateScreenSize(RGSSThreadData *rtData)
+	void recalculateScreenSize(bool fixedAspectRatio)
 	{
 		scSize = winSize;
 
-		if (!rtData->config.fixedAspectRatio)
+		if (!fixedAspectRatio && integerLastMileScaling)
 		{
 			scOffset = Vec2i(0, 0);
+			return;
+		}
+
+		/* Last mile scaling disabled: just center the integer scale buffer
+		 * inside the window space */
+		if (integerScaleActive && !integerLastMileScaling)
+		{
+			scOffset.x = (winSize.x - scRes.x * integerScaleFactor.x) / 2;
+			scOffset.y = (winSize.y - scRes.y * integerScaleFactor.y) / 2;
+
+			scSize = Vec2i(scRes.x * integerScaleFactor.x, scRes.y * integerScaleFactor.y);
 			return;
 		}
 
@@ -544,10 +570,68 @@ struct GraphicsPrivate
 		scOffset.y = (winSize.y - scSize.y) / 2.f;
 	}
 
+	static int findHighestFittingScale(int base, int target)
+	{
+		int scale = 1;
+
+		while (base * scale <= target)
+			scale += 1;
+
+		return scale - 1;
+	}
+
+	/* Returns whether a new scale was found */
+	bool findHighestIntegerScale()
+	{
+		Vec2i newScale(findHighestFittingScale(scRes.x, winSize.x),
+		               findHighestFittingScale(scRes.y, winSize.y));
+
+		if (threadData->config.fixedAspectRatio)
+		{
+			/* Limit both factors to the smaller of the two */
+			newScale.x = newScale.y = std::min(newScale.x, newScale.y);
+		}
+
+		if (newScale == integerScaleFactor)
+			return false;
+
+		integerScaleFactor = newScale;
+		return true;
+	}
+
+	void rebuildIntegerScaleBuffer()
+	{
+		TEXFBO::fini(integerScaleBuffer);
+		TEXFBO::init(integerScaleBuffer);
+		TEXFBO::allocEmpty(integerScaleBuffer, scRes.x * integerScaleFactor.x,
+		                                       scRes.y * integerScaleFactor.y);
+		TEXFBO::linkFBO(integerScaleBuffer);
+	}
+
+	bool integerScaleStepApplicable() const
+	{
+		if (!integerScaleActive)
+			return false;
+
+		if (integerScaleFactor.x < 1 || integerScaleFactor.y < 1) // XXX should be < 2, this is for testing only
+			return false;
+
+		return true;
+	}
+
 	void checkResize()
 	{
 		if (threadData->windowSizeMsg.poll(winSize))
 		{
+			/* Query the acutal size in pixels, not units */
+			SDL_GL_GetDrawableSize(threadData->window, &winSize.x, &winSize.y);
+
+			/* Make sure integer buffers are rebuilt before screen offsets are
+			 * calculated so we have the final allocated buffer size ready */
+			if (integerScaleActive)
+				if (findHighestIntegerScale())
+					rebuildIntegerScaleBuffer();
+
 			/* some GL drivers change the viewport on window resize */
 			glState.viewport.refresh();
 			recalculateScreenSize(threadData);
@@ -600,20 +684,64 @@ struct GraphicsPrivate
 
 	void metaBlitBufferFlippedScaled()
 	{
-		GLMeta::blitRectangle(IntRect(0, 0, scRes.x, scRes.y),
+		metaBlitBufferFlippedScaled(scRes);
+	}
+
+	void metaBlitBufferFlippedScaled(const Vec2i &sourceSize, bool forceNearestNeighbour = false)
+	{
+		GLMeta::blitRectangle(IntRect(0, 0, sourceSize.x, sourceSize.y),
 		                      IntRect(scOffset.x, scSize.y+scOffset.y, scSize.x, -scSize.y),
-		                      threadData->config.smoothScaling);
+		                      !forceNearestNeighbour && threadData->config.smoothScaling);
 	}
 
 	void redrawScreen()
 	{
 		screen.composite();
 
+		// maybe unspaghetti this later
+		if (integerScaleStepApplicable() && !integerLastMileScaling)
+		{
+			GLMeta::blitBeginScreen(winSize);
+			GLMeta::blitSource(screen.getPP().frontBuffer());
+
+			FBO::clear();
+			metaBlitBufferFlippedScaled(scRes, true);
+			GLMeta::blitEnd();
+
+			swapGLBuffer();
+			return;
+		}
+
+		if (integerScaleStepApplicable())
+		{
+			assert(integerScaleBuffer.tex != TEX::ID(0));
+			GLMeta::blitBegin(integerScaleBuffer);
+			GLMeta::blitSource(screen.getPP().frontBuffer());
+
+			GLMeta::blitRectangle(IntRect(0, 0, scRes.x, scRes.y),
+			                      IntRect(0, 0, integerScaleBuffer.width, integerScaleBuffer.height),
+			                      false);
+
+			GLMeta::blitEnd();
+		}
+
 		GLMeta::blitBeginScreen(winSize);
-		GLMeta::blitSource(screen.getPP().frontBuffer());
+
+		Vec2i sourceSize;
+
+		if (integerScaleActive)
+		{
+			GLMeta::blitSource(integerScaleBuffer);
+			sourceSize = Vec2i(integerScaleBuffer.width, integerScaleBuffer.height);
+		}
+		else
+		{
+			GLMeta::blitSource(screen.getPP().frontBuffer());
+			sourceSize = scRes;
+		}
 
 		FBO::clear();
-		metaBlitBufferFlippedScaled();
+		metaBlitBufferFlippedScaled(sourceSize);
 
 		GLMeta::blitEnd();
 
@@ -1026,7 +1154,48 @@ bool Graphics::getFixedAspectRatio() const
 void Graphics::setFixedAspectRatio(bool value)
 {
 	shState->config().fixedAspectRatio = value;
-	p->recalculateScreenSize(p->threadData);
+	p->findHighestIntegerScale();
+	p->recalculateScreenSize(p->threadData->config.fixedAspectRatio);
+	p->updateScreenResoRatio(p->threadData);
+}
+
+bool Graphics::getSmoothScaling() const
+{
+	// Same deal as with fixed aspect ratio
+	return shState->config().smoothScaling;
+}
+
+void Graphics::setSmoothScaling(bool value)
+{
+	shState->config().smoothScaling = value;
+}
+
+bool Graphics::getIntegerScaling() const
+{
+	return p->integerScaleActive;
+}
+
+void Graphics::setIntegerScaling(bool value)
+{
+	p->integerScaleActive = value;
+
+	p->findHighestIntegerScale();
+	p->rebuildIntegerScaleBuffer();
+
+	p->recalculateScreenSize(p->threadData->config.fixedAspectRatio);
+	p->updateScreenResoRatio(p->threadData);
+}
+
+bool Graphics::getLastMileScaling() const
+{
+	return p->integerLastMileScaling;
+}
+
+void Graphics::setLastMileScaling(bool value)
+{
+	p->integerLastMileScaling = value;
+
+	p->recalculateScreenSize(p->threadData->config.fixedAspectRatio);
 	p->updateScreenResoRatio(p->threadData);
 }
 
