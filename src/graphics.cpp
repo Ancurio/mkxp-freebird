@@ -626,7 +626,7 @@ struct GraphicsPrivate
 			/* Query the acutal size in pixels, not units */
 			SDL_GL_GetDrawableSize(threadData->window, &winSize.x, &winSize.y);
 
-			Debug() << "Reported drawable size:" << winSize.x << "winSize.y";
+			Debug() << "Reported drawable size:" << winSize.x << winSize.y;
 
 			/* Make sure integer buffers are rebuilt before screen offsets are
 			 * calculated so we have the final allocated buffer size ready */
