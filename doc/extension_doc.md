@@ -19,6 +19,10 @@ returns: Integer
 
 Returns the cumulative amount of scroll events (negative if down, positive if up) inbetween the current and last `Input.update` call.
 
+## Input::MOUSEX1 / ::MOUSEX2
+
+These two constants representing two extra mouse buttons can be passed to the familiar #press?/#trigger?/#repeat? functions.
+
 ## MKXP.data_directory()
 returns: String  
 

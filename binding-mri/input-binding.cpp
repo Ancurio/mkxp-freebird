@@ -156,7 +156,9 @@ static buttonCodes[] =
 
 	{ "MOUSELEFT",   Input::MouseLeft   },
 	{ "MOUSEMIDDLE", Input::MouseMiddle },
-	{ "MOUSERIGHT",  Input::MouseRight  }
+	{ "MOUSERIGHT",  Input::MouseRight  },
+	{ "MOUSEX1",     Input::MouseX1     },
+	{ "MOUSEX2",     Input::MouseX2     }
 };
 
 static elementsN(buttonCodes);

@@ -34,7 +34,7 @@
 #include <string.h>
 #include <assert.h>
 
-#define BUTTON_CODE_COUNT 24
+#define BUTTON_CODE_COUNT 26
 
 struct ButtonState
 {
@@ -237,7 +237,7 @@ static const int mapToIndex[] =
 	0,
 	16, 17, 18, 19, 20,
 	0, 0, 0, 0, 0, 0, 0, 0,
-	21, 22, 23
+	21, 22, 23, 24, 25
 };
 
 static elementsN(mapToIndex);
@@ -465,12 +465,14 @@ struct InputPrivate
 
 	void initMsBindings()
 	{
-		msBindings.resize(3);
+		msBindings.resize(5);
 
 		size_t i = 0;
 		msBindings[i++] = MsBinding(SDL_BUTTON_LEFT,   Input::MouseLeft);
 		msBindings[i++] = MsBinding(SDL_BUTTON_MIDDLE, Input::MouseMiddle);
 		msBindings[i++] = MsBinding(SDL_BUTTON_RIGHT,  Input::MouseRight);
+		msBindings[i++] = MsBinding(SDL_BUTTON_X1,     Input::MouseX1);
+		msBindings[i++] = MsBinding(SDL_BUTTON_X2,     Input::MouseX2);
 	}
 
 	void pollBindings(Input::ButtonCode &repeatCand)
