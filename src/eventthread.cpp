@@ -215,6 +215,9 @@ void EventThread::process(RGSSThreadData &rtData)
 		{
 		case SDL_MOUSEBUTTONDOWN :
 		case SDL_MOUSEBUTTONUP :
+			if (event.button.button == 8 || event.button.button == 9)
+				event.button.button -= (8 - SDL_BUTTON_X1);
+
 		case SDL_MOUSEMOTION :
 			if (event.button.which == SDL_TOUCH_MOUSEID)
 				continue;
