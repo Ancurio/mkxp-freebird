@@ -119,7 +119,7 @@ GLState::GLState(const Config &conf)
 	blendMode.init(BlendNormal);
 	blend.init(true);
 	scissorTest.init(false);
-	scissorBox.init(IntRect(0, 0, 640, 480));
+	scissorBox.init(IntRect());
 	program.init(0);
 
 	if (conf.maxTextureSize > 0)

@@ -152,6 +152,7 @@ public:
 		pp.startRender();
 
 		glState.viewport.set(IntRect(0, 0, w, h));
+		glState.scissorBox.pushSet(IntRect(0, 0, w, h));
 
 		FBO::clear();
 
@@ -166,6 +167,8 @@ public:
 
 			brightnessQuad.draw();
 		}
+
+		glState.scissorBox.pop();
 	}
 
 	void requestViewportRender(const Vec4 &c, const Vec4 &f, const Vec4 &t)
