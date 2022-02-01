@@ -39,5 +39,10 @@ dataPathOrg=dancingdragon
 dataPathApp=skyborn
 ```
 
+## MKXP.mouse_in_window()
+returns: Boolean
+
+Returns true if the mouse cursor is currently within the game window, false otherwise.
+
 ## Arbitrary key states
 Use `MKXP.raw_key_states` to get the current byte array of keystates, then call `#getbyte(scancode)` with `scancode` being one of the constants defined in `SDL_scancode_map.rb`. **0** means the key is released, **1** that it is pressed.
