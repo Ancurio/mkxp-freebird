@@ -14,6 +14,11 @@ returns: self
 
 Writes the contents of the bitmap to `filename`, in PNG format.
 
+## Bitmap.v_flip() / .h_flip()
+returns: nil  
+
+Flips the bitmap image vertically / horizontally.
+
 ## Input.scroll_v()
 returns: Integer  
 

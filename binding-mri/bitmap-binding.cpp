@@ -445,6 +445,28 @@ RB_METHOD(bitmapWriteToPng)
 	return self;
 }
 
+RB_METHOD(bitmapVFlip)
+{
+	RB_UNUSED_PARAM;
+
+	Bitmap *b = getPrivateData<Bitmap>(self);
+
+	b->vFlip();
+
+	return Qnil;
+}
+
+RB_METHOD(bitmapHFlip)
+{
+	RB_UNUSED_PARAM;
+
+	Bitmap *b = getPrivateData<Bitmap>(self);
+
+	b->hFlip();
+
+	return Qnil;
+}
+
 
 void
 bitmapBindingInit()
@@ -479,6 +501,8 @@ bitmapBindingInit()
 	}
 
 	_rb_define_method(klass, "write_to_png", bitmapWriteToPng);
+	_rb_define_method(klass, "v_flip", bitmapVFlip);
+	_rb_define_method(klass, "h_flip", bitmapHFlip);
 
 	INIT_PROP_BIND(Bitmap, Font, "font");
 }

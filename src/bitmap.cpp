@@ -259,6 +259,34 @@ struct BitmapPrivate
 
 		glState.viewport.pop();
 	}
+
+	void flip(const IntRect &srcRect)
+	{
+		TEXFBO newTex = shState->texPool().request(gl.width, gl.height);
+
+		SimpleShader &shader = shState->shaders().simple;
+		shader.bind();
+		shader.setTexOffsetX(0);
+		bindTexture(shader);
+
+		Quad &quad = shState->gpQuad();
+		quad.setTexPosRect(srcRect, IntRect(0, 0, gl.width, gl.height));
+		quad.setColor(Vec4(1, 1, 1, 1));
+
+		glState.blend.pushSet(false);
+		pushSetViewport(shader);
+
+		FBO::bind(newTex.fbo);
+		blitQuad(quad);
+
+		popViewport();
+		glState.blend.pop();
+
+		shState->texPool().release(gl);
+		gl = newTex;
+
+		onModified();
+	}
 };
 
 struct BitmapOpenHandler : FileSystem::OpenHandler
@@ -1408,6 +1436,22 @@ void Bitmap::writeToPng(const char *filename)
 {
 	p->downloadToSurface();
 	IMG_SavePNG(p->surface, filename);
+}
+
+void Bitmap::vFlip()
+{
+	guardDisposed();
+	GUARD_MEGA;
+
+	p->flip(IntRect(0, p->gl.height, p->gl.width, -p->gl.height));
+}
+
+void Bitmap::hFlip()
+{
+	guardDisposed();
+	GUARD_MEGA;
+
+	p->flip(IntRect(p->gl.width, 0, -p->gl.width, p->gl.height));
 }
 
 TEXFBO &Bitmap::getGLTypes()

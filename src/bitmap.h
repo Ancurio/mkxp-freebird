@@ -108,6 +108,9 @@ public:
 	/* extensions */
 	void writeToPng(const char *filename);
 
+	void vFlip();
+	void hFlip();
+
 	/* <internal> */
 	TEXFBO &getGLTypes();
 	SDL_Surface *megaSurface() const;
