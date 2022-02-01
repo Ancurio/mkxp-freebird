@@ -1,0 +1,100 @@
+SOURCES=(
+  src/main.cpp
+  src/audio.cpp
+  src/bitmap.cpp
+  src/eventthread.cpp
+  src/filesystem.cpp
+  src/font.cpp
+  src/iniconfig.cpp
+  src/input.cpp
+  src/plane.cpp
+  src/scene.cpp
+  src/sprite.cpp
+  src/table.cpp
+  src/tilequad.cpp
+  src/viewport.cpp
+  src/window.cpp
+  src/texpool.cpp
+  src/shader.cpp
+  src/glstate.cpp
+  src/tilemap.cpp
+  src/autotiles.cpp
+  src/graphics.cpp
+  src/gl-debug.cpp
+  src/etc.cpp
+  src/config.cpp
+  src/settingsmenu.cpp
+  src/keybindings.cpp
+  src/tileatlas.cpp
+  src/sharedstate.cpp
+  src/gl-fun.cpp
+  src/gl-meta.cpp
+  src/vertex.cpp
+  src/soundemitter.cpp
+  src/sdlsoundsource.cpp
+  src/alstream.cpp
+  src/audiostream.cpp
+  src/rgssad.cpp
+  src/bundledfont.cpp
+  src/vorbissource.cpp
+  src/windowvx.cpp
+  src/tilemapvx.cpp
+  src/tileatlasvx.cpp
+  src/autotilesvx.cpp
+  src/midisource.cpp
+  src/fluid-fun.cpp
+)
+
+SOURCES_C=(
+  steamshim/steamshim_child.c
+)
+  
+MRI_SOURCES=(
+  binding-mri/binding-mri.cpp
+  binding-mri/binding-util.cpp
+  binding-mri/table-binding.cpp
+  binding-mri/etc-binding.cpp
+  binding-mri/bitmap-binding.cpp
+  binding-mri/font-binding.cpp
+  binding-mri/graphics-binding.cpp
+  binding-mri/input-binding.cpp
+  binding-mri/sprite-binding.cpp
+  binding-mri/viewport-binding.cpp
+  binding-mri/plane-binding.cpp
+  binding-mri/window-binding.cpp
+  binding-mri/tilemap-binding.cpp
+  binding-mri/audio-binding.cpp
+  binding-mri/module_rpg.cpp
+  binding-mri/filesystem-binding.cpp
+  binding-mri/windowvx-binding.cpp
+  binding-mri/tilemapvx-binding.cpp
+)
+
+EMBED=(
+  shader/common.h
+  shader/transSimple.frag
+  shader/trans.frag
+  shader/hue.frag
+  shader/sprite.frag
+  shader/plane.frag
+  shader/gray.frag
+  shader/bitmapBlit.frag
+  shader/flatColor.frag
+  shader/simple.frag
+  shader/simpleColor.frag
+  shader/simpleAlpha.frag
+  shader/simpleAlphaUni.frag
+  shader/flashMap.frag
+  shader/minimal.vert
+  shader/simple.vert
+  shader/simpleColor.vert
+  shader/sprite.vert
+  shader/tilemap.vert
+  shader/blur.frag
+  shader/blurH.vert
+  shader/blurV.vert
+  shader/simpleMatrix.vert
+  shader/tilemapvx.vert
+  assets/liberation.ttf
+  assets/icon.png
+)
