@@ -375,6 +375,7 @@ void EventThread::process(RGSSThreadData &rtData)
 
 		case SDL_JOYBUTTONDOWN :
 			joyState.buttons[event.jbutton.button] = true;
+			Debug() << "JOYBUTTONDOWN" << (int)event.jbutton.button;
 			break;
 
 		case SDL_JOYBUTTONUP :
@@ -383,10 +384,12 @@ void EventThread::process(RGSSThreadData &rtData)
 
 		case SDL_JOYHATMOTION :
 			joyState.hats[event.jhat.hat] = event.jhat.value;
+			Debug() << "JOYHATMOTION" << (int)event.jhat.hat << (int)event.jhat.value;
 			break;
 
 		case SDL_JOYAXISMOTION :
 			joyState.axes[event.jaxis.axis] = event.jaxis.value;
+			Debug() << "JOYAXISMOTION" << (int)event.jaxis.axis << (int)event.jaxis.value;
 			break;
 
 		case SDL_JOYDEVICEADDED :

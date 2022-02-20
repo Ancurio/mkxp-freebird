@@ -84,6 +84,7 @@ RB_METHOD(mkxpDataDirectory);
 RB_METHOD(mkxpPuts);
 RB_METHOD(mkxpRawKeyStates);
 RB_METHOD(mkxpMouseInWindow);
+RB_METHOD(mkxpRawJoyState);
 
 RB_METHOD(mriRgssMain);
 RB_METHOD(mriRgssStop);
@@ -149,6 +150,7 @@ static void mriBindingInit()
 	_rb_define_module_function(mod, "puts", mkxpPuts);
 	_rb_define_module_function(mod, "raw_key_states", mkxpRawKeyStates);
 	_rb_define_module_function(mod, "mouse_in_window", mkxpMouseInWindow);
+	_rb_define_module_function(mod, "raw_joy_state", mkxpRawJoyState);
 
 	/* Load global constants */
 	rb_gv_set("MKXP", Qtrue);
@@ -247,6 +249,48 @@ RB_METHOD(mkxpRawKeyStates)
 	keyStatesMirror = keyStatesMirrorAry;
 
 	return str;
+}
+
+// pendant to keyStatesMirrorAry
+static EventThread::JoyState joyStateMirror;
+EventThread::JoyState *joyStateMirrorPtr = &EventThread::joyState;
+
+RB_METHOD(mkxpRawJoyState)
+{
+	RB_UNUSED_PARAM;
+
+	memcpy(&joyStateMirror, &EventThread::joyState, sizeof(EventThread::JoyState));
+	joyStateMirrorPtr = &joyStateMirror;
+
+	// Assume a smaller axis/hat/button count per joystick than EThread does
+	// TIL: "axis" is singular, "axes" is plural
+	const size_t axisCount = 8;
+	VALUE axes = rb_ary_new_capa(axisCount);
+	for (size_t i = 0; i < axisCount; ++i)
+	{
+		rb_ary_push(axes, rb_int_new(joyStateMirror.axes[i]));
+	}
+
+	const size_t hatsCount = 8;
+	VALUE hats = rb_ary_new_capa(hatsCount);
+	for (size_t i = 0; i < hatsCount; ++i)
+	{
+		rb_ary_push(hats, rb_int_new(joyStateMirror.hats[i]));
+	}
+
+	const size_t buttonCount = 32;
+	VALUE buttons = rb_ary_new_capa(buttonCount);
+	for (size_t i = 0; i < buttonCount; ++i)
+	{
+		rb_ary_push(buttons, rb_bool_new(joyStateMirror.buttons[i]));
+	}
+
+	VALUE result = rb_ary_new_capa(3);
+	rb_ary_push(result, axes);
+	rb_ary_push(result, hats);
+	rb_ary_push(result, buttons);
+
+	return result;
 }
 
 RB_METHOD(mkxpMouseInWindow)
