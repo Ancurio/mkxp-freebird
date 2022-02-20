@@ -32,6 +32,7 @@
 #include <SDL_mouse.h>
 #include <SDL_mutex.h>
 #include <SDL_atomic.h>
+#include <SDL_gamecontroller.h>
 
 #include <string>
 
@@ -55,6 +56,12 @@ public:
 		bool buttons[256];
 	};
 
+	struct ControllerState
+	{
+		int axes[SDL_CONTROLLER_AXIS_MAX];
+		bool buttons[SDL_CONTROLLER_BUTTON_MAX];
+	};
+
 	struct MouseState
 	{
 		int x, y;
@@ -75,6 +82,7 @@ public:
 
 	static uint8_t keyStates[SDL_NUM_SCANCODES];
 	static JoyState joyState;
+	static ControllerState controllerState;
 	static MouseState mouseState;
 	static TouchState touchState;
 	static SDL_atomic_t verticalScrollDistance;

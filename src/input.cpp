@@ -182,6 +182,30 @@ struct JsHatBinding : public Binding
 	uint8_t pos;
 };
 
+struct CtrlButtonBinding : public Binding
+{
+	CtrlButtonBinding() {}
+
+	CtrlButtonBinding(SDL_GameControllerButton buttonCode,
+	                  Input::ButtonCode target)
+	    : Binding(target),
+	      code(buttonCode)
+	{}
+
+	bool sourceActive() const
+	{
+		return EventThread::controllerState.buttons[code];
+	}
+
+	bool sourceRepeatable() const
+	{
+		// Only using this for DPad, which is always repeatable
+		return true;
+	}
+
+	SDL_GameControllerButton code;
+};
+
 /* Mouse button binding */
 struct MsBinding : public Binding
 {
@@ -275,6 +299,7 @@ struct InputPrivate
 	std::vector<JsAxisBinding> jsABindings;
 	std::vector<JsHatBinding> jsHBindings;
 	std::vector<JsButtonBinding> jsBBindings;
+	std::vector<CtrlButtonBinding> ctrlBindings;
 	std::vector<MsBinding> msBindings;
 
 	/* Collective binding array */
@@ -307,6 +332,11 @@ struct InputPrivate
 	{
 		initStaticKbBindings();
 		initMsBindings();
+
+		ctrlBindings.push_back(CtrlButtonBinding(SDL_CONTROLLER_BUTTON_DPAD_LEFT, Input::Left));
+		ctrlBindings.push_back(CtrlButtonBinding(SDL_CONTROLLER_BUTTON_DPAD_RIGHT, Input::Right));
+		ctrlBindings.push_back(CtrlButtonBinding(SDL_CONTROLLER_BUTTON_DPAD_UP, Input::Up));
+		ctrlBindings.push_back(CtrlButtonBinding(SDL_CONTROLLER_BUTTON_DPAD_DOWN, Input::Down));
 
 		/* Main thread should have these posted by now */
 		checkBindingChange(rtData);
@@ -447,6 +477,7 @@ struct InputPrivate
 		bindings.clear();
 
 		appendBindings(kbStatBindings);
+		appendBindings(ctrlBindings);
 		appendBindings(msBindings);
 
 		appendBindings(kbBindings);

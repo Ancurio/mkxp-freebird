@@ -84,6 +84,7 @@ RB_METHOD(mkxpDataDirectory);
 RB_METHOD(mkxpPuts);
 RB_METHOD(mkxpRawKeyStates);
 RB_METHOD(mkxpMouseInWindow);
+RB_METHOD(mkxpRawControllerState);
 
 RB_METHOD(mriRgssMain);
 RB_METHOD(mriRgssStop);
@@ -149,6 +150,7 @@ static void mriBindingInit()
 	_rb_define_module_function(mod, "puts", mkxpPuts);
 	_rb_define_module_function(mod, "raw_key_states", mkxpRawKeyStates);
 	_rb_define_module_function(mod, "mouse_in_window", mkxpMouseInWindow);
+	_rb_define_module_function(mod, "raw_controller_state", mkxpRawControllerState);
 
 	/* Load global constants */
 	rb_gv_set("MKXP", Qtrue);
@@ -247,6 +249,26 @@ RB_METHOD(mkxpRawKeyStates)
 	keyStatesMirror = keyStatesMirrorAry;
 
 	return str;
+}
+
+RB_METHOD(mkxpRawControllerState)
+{
+	RB_UNUSED_PARAM;
+
+	VALUE buttonsStr = rb_str_new(0, SDL_CONTROLLER_BUTTON_MAX);
+	char *ptr = RSTRING_PTR(buttonsStr);
+
+	for (size_t i = 0; i < SDL_CONTROLLER_BUTTON_MAX; ++i)
+		ptr[i] = EventThread::controllerState.buttons[i] ? 1 : 0;
+
+	VALUE axesAry = rb_ary_new_capa(SDL_CONTROLLER_AXIS_MAX);
+	for (size_t i = 0; i < SDL_CONTROLLER_AXIS_MAX; ++i)
+		rb_ary_push(axesAry, rb_int_new(EventThread::controllerState.axes[i]));
+
+	VALUE combined[] = {buttonsStr, axesAry};
+	VALUE combinedAry = rb_ary_new_from_values(2, combined);
+
+	return combinedAry;
 }
 
 RB_METHOD(mkxpMouseInWindow)

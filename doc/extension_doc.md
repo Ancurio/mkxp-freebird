@@ -46,3 +46,21 @@ Returns true if the mouse cursor is currently within the game window, false othe
 
 ## Arbitrary key states
 Use `MKXP.raw_key_states` to get the current byte array of keystates, then call `#getbyte(scancode)` with `scancode` being one of the constants defined in `SDL_scancode_map.rb`. **0** means the key is released, **1** that it is pressed.
+
+# Gamepad axis / button states
+Use `MKXP.raw_controller_state`, which returns an array `[buttons, axes]`. `buttons` is a byte array and works analogous to the one returned by `raw_key_states`. `axes` is an array of integers in the range of -32768 to 32767, one per axis. Following indices are used:
+
+```ruby
+module SDL_Controller_Button
+end
+[
+    :A, :B, :X, :Y, :SELECT, :LOGO, :START, :LEFTSTICK, :RIGHTSTICK,
+    :LEFTSHOULDER, :RIGHTSHOULDER, :DPAD_UP, :DPAD_DOWN, :DPAD_LEFT, :DPAD_RIGHT,
+].each_with_index {|key, idx| SDL_Controller_Buttons.const_set(key, idx)}
+
+module SDL_Controller_Axis
+end
+[
+    :LEFT_X, :LEFT_Y, :RIGHT_X, :RIGHT_Y, :TRIGGER_LEFT, :TRIGGER_RIGHT
+].each_with_index {|key, idx| SDL_Controller_Axes.const_set(key, idx)}
+```
