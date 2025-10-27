@@ -40,12 +40,12 @@
 
 #include <string.h>
 
-typedef void (ALC_APIENTRY *LPALCDEVICEPAUSESOFT) (ALCdevice *device);
-typedef void (ALC_APIENTRY *LPALCDEVICERESUMESOFT) (ALCdevice *device);
+typedef void (ALC_APIENTRY *_LPALCDEVICEPAUSESOFT) (ALCdevice *device);
+typedef void (ALC_APIENTRY *_LPALCDEVICERESUMESOFT) (ALCdevice *device);
 
 #define AL_DEVICE_PAUSE_FUN \
-	AL_FUN(DevicePause, LPALCDEVICEPAUSESOFT) \
-	AL_FUN(DeviceResume, LPALCDEVICERESUMESOFT)
+	AL_FUN(DevicePause, _LPALCDEVICEPAUSESOFT) \
+	AL_FUN(DeviceResume, _LPALCDEVICERESUMESOFT)
 
 struct ALCFunctions
 {
