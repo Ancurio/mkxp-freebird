@@ -1,3 +1,4 @@
+
 # mkxp extenions for Dancing Dragon Games / Symphony of War
 
 ## Graphics.resize_window(width, height, recenter)
@@ -7,6 +8,10 @@ recenter: Boolean, false by default
 returns: nil  
 
 Resizes the game window to width x height. If `recenter` is **true**, also center the window on the current screen.
+
+## Graphics.maximize_window()
+
+Maximizes the game window, ignoring the `winResizable` config option.
 
 ## Bitmap.write_to_png(filename)
 filename: String  

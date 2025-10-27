@@ -80,6 +80,7 @@ enum
 {
 	REQUEST_SETFULLSCREEN = 0,
 	REQUEST_WINRESIZE,
+	REQUEST_WINMAXIMIZE,
 	REQUEST_MESSAGEBOX,
 	REQUEST_SETCURSORVISIBLE,
 
@@ -459,6 +460,10 @@ void EventThread::process(RGSSThreadData &rtData)
 				updateCursorState(cursorInWindow, gameScreen);
 				break;
 
+			case REQUEST_WINMAXIMIZE :
+				SDL_MaximizeWindow(win);
+				break;
+
 			case UPDATE_FPS :
 				if (rtData.config.printFPS)
 					Debug() << "FPS:" << event.user.code;
@@ -619,6 +624,13 @@ void EventThread::requestWindowResize(int width, int height, bool recenter)
 	SDL_Event event;
 	event.type = usrIdStart + REQUEST_WINRESIZE;
 	writeResizeRequest(event.window, width, height, recenter);
+	SDL_PushEvent(&event);
+}
+
+void EventThread::requestWindowMaximize()
+{
+	SDL_Event event;
+	event.type = usrIdStart + REQUEST_WINMAXIMIZE;
 	SDL_PushEvent(&event);
 }
 
