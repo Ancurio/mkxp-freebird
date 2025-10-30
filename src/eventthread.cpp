@@ -81,6 +81,7 @@ enum
 	REQUEST_SETFULLSCREEN = 0,
 	REQUEST_WINRESIZE,
 	REQUEST_WINMAXIMIZE,
+	REQUEST_WINRESTORE,
 	REQUEST_MESSAGEBOX,
 	REQUEST_SETCURSORVISIBLE,
 
@@ -464,6 +465,10 @@ void EventThread::process(RGSSThreadData &rtData)
 				SDL_MaximizeWindow(win);
 				break;
 
+			case REQUEST_WINRESTORE :
+				SDL_RestoreWindow(win);
+				break;
+
 			case UPDATE_FPS :
 				if (rtData.config.printFPS)
 					Debug() << "FPS:" << event.user.code;
@@ -631,6 +636,13 @@ void EventThread::requestWindowMaximize()
 {
 	SDL_Event event;
 	event.type = usrIdStart + REQUEST_WINMAXIMIZE;
+	SDL_PushEvent(&event);
+}
+
+void EventThread::requestWindowRestore()
+{
+	SDL_Event event;
+	event.type = usrIdStart + REQUEST_WINRESTORE;
 	SDL_PushEvent(&event);
 }
 

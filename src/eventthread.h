@@ -90,6 +90,7 @@ public:
 	void requestFullscreenMode(bool mode);
 	void requestWindowResize(int width, int height, bool recenter = false);
 	void requestWindowMaximize();
+	void requestWindowRestore();
 	void requestShowCursor(bool mode);
 
 	void requestTerminate();

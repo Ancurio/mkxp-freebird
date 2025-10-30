@@ -218,6 +218,15 @@ RB_METHOD(graphicsMaximizeWindow)
 	return Qnil;
 }
 
+RB_METHOD(graphicsRestoreWindow)
+{
+	RB_UNUSED_PARAM;
+
+	shState->eThread().requestWindowRestore();
+
+	return Qnil;
+}
+
 DEF_GRA_PROP_I(FrameRate)
 DEF_GRA_PROP_I(FrameCount)
 DEF_GRA_PROP_I(Brightness)
@@ -278,4 +287,5 @@ void graphicsBindingInit()
 
 	_rb_define_module_function(module, "resize_window", graphicsResizeWindow);
 	_rb_define_module_function(module, "maximize_window", graphicsMaximizeWindow);
+	_rb_define_module_function(module, "restore_window", graphicsRestoreWindow);
 }

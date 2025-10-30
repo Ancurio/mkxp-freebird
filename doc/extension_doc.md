@@ -13,6 +13,10 @@ Resizes the game window to width x height. If `recenter` is **true**, also cente
 
 Maximizes the game window, ignoring the `winResizable` config option.
 
+## Graphics.restore_window()
+
+Restores the game window from a maximized or minimized state.
+
 ## Bitmap.write_to_png(filename)
 filename: String  
 returns: self  
